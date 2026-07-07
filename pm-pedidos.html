@@ -1,0 +1,2161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="PM Pedidos">
+    <title>PM Pedidos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; -webkit-font-smoothing: antialiased; letter-spacing: 0.1px; }
+
+        .screen { display: none; min-height: 100vh; padding-bottom: 60px; }
+        .screen.active { display: block; }
+
+        .header { background: #1F3864; color: white; padding: 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+        .header h1 { font-size: 18px; flex: 1; }
+        .back-btn { background: none; border: none; color: white; font-size: 22px; cursor: pointer; padding: 4px 8px; }
+
+        /* INICIO */
+        #screen-inicio.active { background: #1F3864; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }
+        .logo-icon  { font-size: 64px; margin-bottom: 12px; }
+        .logo-title { color: white; font-size: 30px; font-weight: bold; margin-bottom: 6px; }
+        .logo-sub   { color: rgba(255,255,255,0.6); margin-bottom: 48px; font-size: 14px; }
+        .role-btn   { width: 100%; max-width: 320px; padding: 20px; margin-bottom: 14px; border: none; border-radius: 14px; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .role-btn.vendedor { background: #27AE60; color: white; }
+        .role-btn.admin    { background: #E74C3C; color: white; }
+        .role-btn.deposito { background: #F39C12; color: white; }
+        .role-btn.imprimir { background: #8E44AD; color: white; }
+        .role-btn.armado   { background: #16A085; color: white; }
+
+        /* MODAL CONTRASEÑA */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 999; align-items: center; justify-content: center; }
+        .modal-overlay.open { display: flex; }
+        .modal-box { background: white; border-radius: 18px; padding: 28px 24px; width: 90%; max-width: 340px; }
+        .modal-box h2 { font-size: 20px; margin-bottom: 8px; color: #1F3864; }
+        .modal-box p  { font-size: 14px; color: #888; margin-bottom: 20px; }
+        .modal-box input { width: 100%; padding: 14px; border: 1.5px solid #e0e0e0; border-radius: 10px; font-size: 18px; letter-spacing: 3px; margin-bottom: 16px; text-align: center; }
+        .modal-btns { display: flex; gap: 10px; }
+        .modal-btns button { flex: 1; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .modal-ok     { background: #E74C3C; color: white; }
+        .modal-cancel { background: #f0f0f0; color: #666; }
+        .modal-error  { color: #E74C3C; font-size: 13px; text-align: center; margin-top: -10px; margin-bottom: 12px; display: none; }
+
+        /* TABS */
+        .tabs { display: flex; background: white; border-bottom: 2px solid #eee; position: sticky; top: 56px; z-index: 9; }
+        .tab { flex: 1; padding: 13px 4px; text-align: center; font-size: 13px; cursor: pointer; color: #888; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+        .tab.active { color: #1F3864; border-bottom-color: #1F3864; font-weight: bold; }
+
+        /* CARD */
+        .card { background: white; border-radius: 14px; padding: 18px; margin: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+        .card h3 { font-size: 15px; color: #1F3864; margin-bottom: 14px; font-weight: 700; }
+
+        /* FORM */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; color: #555; margin-bottom: 5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+        label .obl { color: #E74C3C; }
+        input, select, textarea { width: 100%; padding: 13px; border: 1.5px solid #e0e0e0; border-radius: 10px; font-size: 16px; background: #fafafa; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #1F3864; background: white; }
+        textarea { resize: vertical; min-height: 80px; }
+
+        /* SECTION DIVIDER */
+        .section-divider { background: #f0f2f5; color: #777; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 8px 18px; margin: 0 12px; border-radius: 6px; }
+
+        /* BUTTONS */
+        .btn { display: block; width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
+        .btn-primary { background: #1F3864; color: white; }
+        .btn-success { background: #27AE60; color: white; }
+        .btn-danger  { background: #E74C3C; color: white; }
+        .btn-warning { background: #F39C12; color: white; }
+        .btn-print   { background: #8E44AD; color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* BADGES */
+        .badge { display: inline-block; padding: 4px 11px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .badge-pendiente  { background: #FEF9C3; color: #854D0E; }
+        .badge-aprobado   { background: #DCFCE7; color: #166534; }
+        .badge-rechazado  { background: #FEE2E2; color: #991B1B; }
+        .badge-armado     { background: #DBEAFE; color: #1E40AF; }
+        .badge-entregado  { background: #D1FAE5; color: #065F46; }
+        .badge-modificado { background: #E74C3C; color: white; }
+
+        /* PEDIDO ITEM */
+        .pedido-item { background: white; border-left: 5px solid #1F3864; border-radius: 0 12px 12px 0; padding: 14px 16px; margin: 8px 12px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.06); user-select: none; }
+        .pedido-item:active { opacity: 0.75; }
+        .pedido-item.aprobado   { border-left-color: #27AE60; }
+        .pedido-item.rechazado  { border-left-color: #E74C3C; }
+        .pedido-item.armado     { border-left-color: #3498DB; }
+        .pedido-item.entregado  { border-left-color: #888; }
+        .pedido-item.modificado-border { border-left-color: #E74C3C; animation: pulso 1s infinite; }
+        @keyframes pulso { 0%,100%{border-left-width:5px} 50%{border-left-width:9px} }
+        .pedido-item h3 { font-size: 16px; margin-bottom: 4px; }
+        .pedido-item p  { font-size: 13px; color: #666; margin-top: 3px; }
+        .pedido-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+
+        /* ALERTA MODIFICADO */
+        .banner-mod { background: #E74C3C; color: white; padding: 14px 16px; border-radius: 10px; font-weight: bold; font-size: 14px; margin: 8px 12px; text-align: center; }
+        .alerta-item { background: #FFECEC; border: 1.5px solid #E74C3C; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #991B1B; margin-top: 6px; font-weight: 600; }
+
+        /* DETAIL */
+        .detail-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f2f2f2; gap: 12px; }
+        .detail-row:last-child { border-bottom: none; }
+        .d-label { color: #888; font-size: 13px; flex-shrink: 0; }
+        .d-value { font-weight: 600; font-size: 14px; text-align: right; }
+
+        /* PAGOS */
+        .pagos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .pago-box { background: #f8f9fa; border-radius: 10px; padding: 12px; text-align: center; }
+        .pago-box .p-label { font-size: 11px; color: #888; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+        .pago-box .p-val   { font-size: 17px; font-weight: 800; color: #1F3864; }
+
+        /* LABEL */
+        .label-box { background: white; border: 2px solid #222; border-radius: 6px; margin: 12px; padding: 28px 24px; font-family: 'Courier New', monospace; line-height: 2; font-size: 16px; }
+        .lb-bold  { font-weight: bold; font-size: 18px; }
+        .lb-space { height: 10px; }
+        .lb-alerta { color: #E74C3C; font-weight: bold; font-size: 17px; border: 2px solid #E74C3C; padding: 6px; text-align: center; border-radius: 4px; }
+        .lb-qr { text-align: center; margin-top: 16px; }
+        .lb-qr img { width: 130px; height: 130px; }
+        .lb-divider { border-top: 2px solid #222; margin: 12px 0; }
+
+        /* FAB */
+        .fab { position: fixed; bottom: 24px; right: 24px; width: 62px; height: 62px; border-radius: 50%; background: #1F3864; color: white; font-size: 30px; border: none; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 100; }
+
+        /* MISC */
+        .empty-state { text-align: center; padding: 64px 32px; color: #bbb; }
+        .empty-icon  { font-size: 52px; margin-bottom: 14px; }
+        .spinner     { text-align: center; padding: 48px; color: #aaa; font-size: 14px; }
+        .nota-admin  { background: #FFF9E6; border-left: 3px solid #F39C12; padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 13px; color: #666; margin-top: 6px; }
+        .nota-rech   { background: #FEE2E2; border-left: 3px solid #E74C3C; padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 13px; color: #991B1B; margin-top: 6px; }
+
+        /* ARMADO / ESCANER */
+        #qr-reader { width: 100%; max-width: 420px; margin: 0 auto 12px; border-radius: 12px; overflow: hidden; }
+
+        /* PRINT */
+        @media print {
+            @page { margin: 0; }
+            html, body { width: 100%; height: 100%; margin: 0; padding: 0; }
+            body > *:not(#print-area) { display: none !important; }
+            #print-area { display: block !important; width: 100%; margin: 0; padding: 0; }
+            #print-area .print-label { display: block; width: 100%; box-sizing: border-box; font-family: Arial, sans-serif; font-size: 22pt; line-height: 1.85; padding: 40pt 50pt; }
+            .print-bold  { font-weight: bold; display: block; }
+            .print-line  { display: block; }
+            .print-space { display: block; height: 14pt; }
+            .print-alerta { display: block; font-weight: bold; color: #000; border: 4pt solid #000; padding: 8pt; text-align: center; margin-bottom: 10pt; }
+            .print-divider { display: block; width: 100%; border-top: 2pt solid #000; margin: 16pt 0; }
+            .print-qr { display: block; text-align: center; margin-top: 20pt; }
+            .print-qr img { width: 140pt; height: 140pt; }
+        }
+
+        /* ===== REFRESH VISUAL MODERNO ===== */
+        .btn, .role-btn, .fab, .tab, input, select, textarea, .modal-btns button, .pedido-item, button {
+            transition: transform .12s ease, box-shadow .15s ease, border-color .15s ease, filter .15s ease;
+        }
+        button:active, .btn:active, .role-btn:active, .fab:active, .modal-btns button:active { transform: scale(0.97); filter: brightness(0.96); }
+        .header { background: linear-gradient(135deg, #2a4f8f 0%, #16233d 100%); box-shadow: 0 2px 14px rgba(0,0,0,0.18); }
+        #screen-inicio.active { background: linear-gradient(160deg, #2a4f8f 0%, #101d34 100%); }
+        .modal-box { border-radius: 22px; box-shadow: 0 16px 44px rgba(0,0,0,0.28); }
+        .card { border-radius: 18px; box-shadow: 0 3px 16px rgba(0,0,0,0.08); }
+        input, select, textarea { border-radius: 12px; }
+        .btn, .role-btn { border-radius: 16px; }
+        .btn { box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
+        .role-btn { box-shadow: 0 4px 16px rgba(0,0,0,0.14); }
+        .badge { border-radius: 999px; letter-spacing: .3px; }
+        .pedido-item { border-radius: 0 16px 16px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+        .fab { box-shadow: 0 6px 22px rgba(31,56,100,0.45); }
+        .section-divider { border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+<!-- MODAL CONTRASEÑA (Vendedor / Admin / Depósito) -->
+<div class="modal-overlay" id="modal-pass">
+    <div class="modal-box">
+        <h2 id="pass-modal-title">🔐 Acceso</h2>
+        <p>Ingresá la contraseña</p>
+        <input type="password" id="input-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter') checkPass()">
+        <div class="modal-error" id="pass-error">Contraseña incorrecta</div>
+        <div class="modal-btns">
+            <button class="modal-cancel" onclick="closePassModal()">Cancelar</button>
+            <button class="modal-ok" onclick="checkPass()">Entrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CONTRASEÑA EMPLEADO (ARMADO) -->
+<div class="modal-overlay" id="modal-empleado-pass">
+    <div class="modal-box">
+        <h2 id="empleado-pass-title">🔐 Acceso</h2>
+        <p>Ingresá tu contraseña</p>
+        <input type="password" id="input-empleado-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter') checkEmpleadoPass()">
+        <div class="modal-error" id="empleado-pass-error">Contraseña incorrecta</div>
+        <div class="modal-btns">
+            <button class="modal-cancel" onclick="closeEmpleadoPassModal()">Cancelar</button>
+            <button class="modal-ok" onclick="checkEmpleadoPass()">Entrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- INICIO -->
+<div id="screen-inicio" class="screen active">
+    <div class="logo-icon">📦</div>
+    <div class="logo-title">PM Pedidos</div>
+    <div class="logo-sub">Sistema de gestión de pedidos</div>
+    <button class="role-btn vendedor" onclick="setRole('vendedor')">🧑‍💼 Soy Vendedor</button>
+    <button class="role-btn admin"    onclick="openPassModal('admin')">👑 Admin (Mateo)</button>
+    <button class="role-btn deposito" onclick="openPassModal('deposito')">🏭 Depósito</button>
+    <button class="role-btn imprimir" onclick="openPassModal('imprimir')">🖨️ Pedidos para Imprimir</button>
+    <button class="role-btn armado"   onclick="openPassModal('armado')">🔧 Armado</button>
+    <button class="role-btn" style="background:#2C82C9;color:white;" onclick="openPassModal('logistica')">🚚 Logística</button>
+    <button class="role-btn" style="background:#D35400;color:white;" onclick="openPassModal('oficina')">🏢 Pedidos Oficina</button>
+</div>
+
+<!-- VENDEDOR - LISTA -->
+<div id="screen-vendedor" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="goHome()">←</button>
+        <h1>Mis Pedidos</h1>
+    </div>
+    <div class="tabs">
+        <div class="tab active" onclick="showVendTab('pendientes')">⏳ Pendientes</div>
+        <div class="tab" onclick="showVendTab('aprobados')">✅ Aprobados</div>
+        <div class="tab" onclick="showVendTab('todos')">📋 Todos</div>
+    </div>
+    <div style="padding:12px 12px 4px;">
+        <select id="select-vendedor" onchange="loadVendedorPedidos()" style="width:100%;padding:13px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:16px;background:#fafafa;">
+            <option value="">-- Seleccioná tu nombre --</option>
+            <option>TOMY</option><option>FRANCO</option><option>MATIAS</option>
+            <option>LEANDRO</option><option>AGUSTINA</option><option>MARTINA</option>
+            <option>VICTORIA</option><option>SOFIA</option><option>CONI</option>
+            <option>ROCIO</option><option>TOMY JORGE</option><option>MEL</option>
+        </select>
+    </div>
+    <div style="padding:0 12px;">
+        <select id="filtro-fecha-vendedor" onchange="cambiarFiltroFecha('vendedor','filtro-fecha-vendedor')" style="width:100%;padding:11px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;background:#fafafa;">
+            <option value="todas">Todas las fechas</option>
+        </select>
+    </div>
+    <div id="vend-list">
+        <div class="empty-state"><div class="empty-icon">👆</div><p>Seleccioná tu nombre</p></div>
+    </div>
+    <button class="fab" onclick="showScreen('nuevo-pedido')">+</button>
+</div>
+
+<!-- VENDEDOR - DETALLE / MODIFICAR -->
+<div id="screen-detalle-vend" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="showScreen('vendedor')">←</button>
+        <h1>Detalle del Pedido</h1>
+    </div>
+    <div id="detalle-vend-content"></div>
+</div>
+
+<!-- NUEVO PEDIDO -->
+<div id="screen-nuevo-pedido" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="showScreen('vendedor')">←</button>
+        <h1>Nuevo Pedido</h1>
+    </div>
+
+    <!-- ENVÍO -->
+    <div class="card">
+        <h3>📦 Método de envío</h3>
+        <div class="form-group">
+            <label>Método <span class="obl">*</span></label>
+            <select id="form-envio" onchange="toggleCampos()">
+                <option value="">-- Seleccioná --</option>
+                <option value="VIA CARGO">VIA CARGO</option>
+                <option value="CORREO">CORREO</option>
+                <option value="TRANSPORTE">TRANSPORTE</option>
+                <option value="MOTOMENSAJERIA">MOTOMENSAJERIA</option>
+                <option value="RETIRO POR LOCAL">RETIRO POR LOCAL</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- VENDEDOR + CLIENTE -->
+    <div class="card">
+        <h3>👤 Datos</h3>
+        <div class="form-group">
+            <label>Vendedor <span class="obl">*</span></label>
+            <select id="form-vendedor">
+                <option value="">-- Seleccioná --</option>
+                <option>TOMY</option><option>FRANCO</option><option>MATIAS</option>
+                <option>LEANDRO</option><option>AGUSTINA</option><option>MARTINA</option>
+                <option>VICTORIA</option><option>SOFIA</option><option>CONI</option>
+                <option>ROCIO</option><option>TOMY JORGE</option><option>MEL</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Nombre del cliente <span class="obl">*</span></label>
+            <input type="text" id="form-nombre" placeholder="Lucas Rolandi">
+        </div>
+        <div class="form-group" id="grp-dni" style="display:none;">
+            <label>DNI <span class="obl">*</span></label>
+            <input type="number" id="form-dni" placeholder="30123456" inputmode="numeric">
+        </div>
+        <div class="form-group">
+            <label>Teléfono <span class="obl">*</span></label>
+            <input type="tel" id="form-tel" placeholder="1136707203">
+        </div>
+        <div class="form-group" id="grp-cp" style="display:none;">
+            <label>Código Postal <span class="obl">*</span></label>
+            <input type="text" id="form-cp" placeholder="1440">
+        </div>
+
+        <!-- Campos solo MOTOMENSAJERIA -->
+        <div id="grp-moto" style="display:none;">
+            <div class="form-group">
+                <label>Dirección <span class="obl">*</span></label>
+                <input type="text" id="form-dir" placeholder="Chascomus 6028">
+            </div>
+            <div class="form-group">
+                <label>Localidad <span class="obl">*</span></label>
+                <input type="text" id="form-loc" placeholder="Mataderos, CABA">
+            </div>
+            <div class="form-group">
+                <label>Entre calles <span class="obl">*</span></label>
+                <input type="text" id="form-entre" placeholder="Entre Murguiondo y Oliden">
+            </div>
+            <div class="form-group">
+                <label>Notas de entrega <span class="obl">*</span></label>
+                <textarea id="form-notas" placeholder="Puerta marrón, estamos hasta las 19hs..."></textarea>
+            </div>
+        </div>
+
+        <!-- Ciudad para correo/cargo/transporte -->
+        <div id="grp-ciudad" style="display:none;">
+            <div class="form-group">
+                <label>Ciudad / Localidad <span class="obl">*</span></label>
+                <input type="text" id="form-ciudad" placeholder="Córdoba Capital">
+            </div>
+        </div>
+    </div>
+
+    <!-- DETALLE DEL PEDIDO -->
+    <div class="card">
+        <h3>📱 Detalle del pedido</h3>
+        <div class="form-group">
+            <label>Productos / descripción <span class="obl">*</span></label>
+            <textarea id="form-detalle" rows="4" placeholder="2x Redmi 14C 256/16GB&#10;1x Funda + vidrio"></textarea>
+        </div>
+        <div class="form-group">
+            <label>Nota para Mateo (opcional)</label>
+            <textarea id="form-nota-admin" placeholder="Algo que quieras aclarar..."></textarea>
+        </div>
+    </div>
+
+    <!-- PAGO -->
+    <div class="card">
+        <h3>💰 Pago</h3>
+        <div class="form-group">
+            <label style="font-weight:900;color:#E74C3C;font-size:13px;">🔄 Cambio devuelve</label>
+            <textarea id="form-cambio-devuelve" placeholder="Productos que el cliente devuelve (si corresponde)"></textarea>
+        </div>
+        <div class="form-group">
+            <label>Seña</label>
+            <input type="number" id="form-sena" placeholder="0" inputmode="numeric">
+        </div>
+        <div class="form-group">
+            <label>Resta abonar</label>
+            <input type="number" id="form-resta" placeholder="0" inputmode="numeric">
+        </div>
+        <div class="form-group">
+            <label>Monto abonado</label>
+            <input type="number" id="form-abonado" placeholder="0" inputmode="numeric">
+        </div>
+        <div class="form-group">
+            <label>Cuenta en donde pagó</label>
+            <input type="text" id="form-cuenta" placeholder="Ej: Mercado Pago Mateo">
+        </div>
+        <button class="btn btn-primary" onclick="submitPedido()">📤 Enviar Pedido</button>
+    </div>
+</div>
+
+<!-- ADMIN - LISTA -->
+<div id="screen-admin" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="goHome()">←</button>
+        <h1>👑 Admin — Pedidos</h1>
+    </div>
+    <div class="tabs">
+        <div class="tab active" onclick="showAdminTab('pendientes')">⏳ Pendientes</div>
+        <div class="tab" onclick="showAdminTab('aprobados')">✅ Aprobados</div>
+        <div class="tab" onclick="showAdminTab('todos')">📋 Todos</div>
+    </div>
+    <div style="padding:10px 12px 0;">
+        <select id="filtro-fecha-admin" onchange="cambiarFiltroFecha('admin','filtro-fecha-admin')" style="width:100%;padding:11px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;background:#fafafa;">
+            <option value="todas">Todas las fechas</option>
+        </select>
+    </div>
+    <div id="admin-list"><div class="spinner">Cargando...</div></div>
+</div>
+
+<!-- ADMIN - DETALLE -->
+<div id="screen-detalle-admin" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="showScreen('admin')">←</button>
+        <h1>Detalle del Pedido</h1>
+    </div>
+    <div id="detalle-admin-content"></div>
+</div>
+
+<!-- DEPÓSITO - LISTA -->
+<div id="screen-deposito" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="goHome()">←</button>
+        <h1>🏭 Depósito</h1>
+    </div>
+    <div class="tabs">
+        <div class="tab active" onclick="showDepTab('aprobados')">✅ Para Armar</div>
+        <div class="tab" onclick="showDepTab('armados')">📦 Pedidos Armados</div>
+        <div class="tab" onclick="showDepTab('porimprimir')">🖨️ Pedidos por Imprimir</div>
+    </div>
+    <div style="padding:10px 12px 0;">
+        <select id="filtro-fecha-dep" onchange="cambiarFiltroFecha('dep','filtro-fecha-dep')" style="width:100%;padding:11px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;background:#fafafa;">
+            <option value="todas">Todas las fechas</option>
+        </select>
+    </div>
+    <div id="dep-list"><div class="spinner">Cargando...</div></div>
+</div>
+
+<!-- ETIQUETA -->
+<div id="screen-etiqueta" class="screen">
+    <div class="header">
+        <button class="back-btn" id="btn-volver-etiqueta" onclick="showScreen('deposito')">←</button>
+        <h1>Etiqueta</h1>
+        <button id="btn-imprimir-header" onclick="imprimirEtiqueta()" style="background:#8E44AD;color:white;border:none;padding:9px 16px;border-radius:9px;font-weight:bold;cursor:pointer;">🖨️ Imprimir</button>
+    </div>
+    <div id="etiqueta-content"></div>
+</div>
+
+<!-- PEDIDOS PARA IMPRIMIR -->
+<div id="screen-imprimir" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="goHome()">←</button>
+        <h1>🖨️ Pedidos para Imprimir</h1>
+    </div>
+    <div class="tabs">
+        <div class="tab active" onclick="showImprimirTab('cola')">🖨️ Para Imprimir</div>
+        <div class="tab" onclick="showImprimirTab('impresos')">✅ Impresos</div>
+    </div>
+    <div id="imprimir-cola-controles" style="padding:12px 12px 4px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;text-transform:none;font-weight:600;margin-bottom:10px;">
+            <input type="checkbox" id="chk-seleccionar-todos" onchange="toggleSeleccionarTodos()" style="width:18px;height:18px;">
+            Seleccionar todos
+        </label>
+        <button class="btn btn-print" id="btn-descargar-pdf" onclick="descargarPdfSeleccionados()">⬇️ Descargar PDF de seleccionados</button>
+    </div>
+    <div style="padding:0 12px;">
+        <select id="filtro-fecha-imprimir" onchange="cambiarFiltroFecha('imprimir','filtro-fecha-imprimir')" style="width:100%;padding:11px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;background:#fafafa;">
+            <option value="todas">Todas las fechas</option>
+        </select>
+    </div>
+    <div id="imprimir-list"><div class="spinner">Cargando...</div></div>
+</div>
+
+<!-- ARMADO - LOGIN DE EMPLEADO -->
+<div id="screen-armado-login" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="goHome()">←</button>
+        <h1>🔧 Armado</h1>
+    </div>
+    <div style="padding:18px 16px;">
+        <p style="color:#888;font-size:13px;margin-bottom:16px;">Seleccioná tu nombre para escanear pedidos</p>
+        <button class="btn" style="background:#16A085;color:white;" onclick="openEmpleadoPassModal('FELIPE')">FELIPE</button>
+        <button class="btn" style="background:#16A085;color:white;" onclick="openEmpleadoPassModal('JUAN')">JUAN</button>
+        <button class="btn" style="background:#16A085;color:white;" onclick="openEmpleadoPassModal('AZUL')">AZUL</button>
+        <button class="btn" style="background:#16A085;color:white;" onclick="openEmpleadoPassModal('FEDE')">FEDE</button>
+        <button class="btn" style="background:#16A085;color:white;" onclick="openEmpleadoPassModal('NAHUEL')">NAHUEL</button>
+    </div>
+</div>
+
+<!-- ARMADO - ESCANEO -->
+<div id="screen-armado-scan" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="salirArmado()">←</button>
+        <h1 id="armado-scan-title">🔧 Armado</h1>
+    </div>
+    <div style="padding:12px;">
+        <button class="btn btn-success" id="btn-iniciar-scan" onclick="iniciarScanner()">📷 Escanear Pedido</button>
+        <button class="btn" style="background:#888;color:white;display:none;" id="btn-detener-scan" onclick="detenerScanner()">✖️ Detener escáner</button>
+        <div id="qr-reader"></div>
+        <div id="armado-resultado"></div>
+    </div>
+</div>
+
+<!-- LOGÍSTICA - LOGIN DE REPARTIDOR -->
+<div id="screen-logistica-login" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="goHome()">←</button>
+        <h1>🚚 Logística</h1>
+    </div>
+    <div style="padding:18px 16px;">
+        <p style="color:#888;font-size:13px;margin-bottom:16px;">Seleccioná tu nombre</p>
+        <button class="btn" style="background:#2C82C9;color:white;" onclick="seleccionarRepartidor('JUAN')">JUAN</button>
+        <button class="btn" style="background:#2C82C9;color:white;" onclick="seleccionarRepartidor('ABEL')">ABEL</button>
+        <button class="btn" style="background:#2C82C9;color:white;" onclick="seleccionarRepartidor('ABUELO')">ABUELO</button>
+        <button class="btn" style="background:#2C82C9;color:white;" onclick="seleccionarRepartidor('LOGISTICA')">LOGISTICA</button>
+        <button class="btn" style="background:#2C82C9;color:white;" onclick="seleccionarRepartidor('OFICINA')">OFICINA</button>
+    </div>
+</div>
+
+<!-- LOGÍSTICA - ESCANEO -->
+<div id="screen-logistica-scan" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="salirLogistica()">←</button>
+        <h1 id="logistica-scan-title">🚚 Logística</h1>
+    </div>
+    <div style="padding:12px;">
+        <button class="btn btn-success" id="btn-iniciar-scan-log" onclick="iniciarScannerLog()">📷 Escanear Pedido</button>
+        <button class="btn" style="background:#888;color:white;display:none;" id="btn-detener-scan-log" onclick="detenerScannerLog()">✖️ Detener escáner</button>
+        <div id="qr-reader-log"></div>
+        <div id="logistica-resultado"></div>
+        <div class="section-divider" style="margin-top:16px;">📋 Mis pedidos asignados</div>
+        <select id="filtro-fecha-logistica" onchange="cambiarFiltroFecha('logistica','filtro-fecha-logistica')" style="width:100%;padding:11px;margin-top:8px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;background:#fafafa;">
+            <option value="todas">Todas las fechas</option>
+        </select>
+        <div id="logistica-lista"><div class="spinner">Cargando...</div></div>
+    </div>
+</div>
+
+<!-- LOGÍSTICA - DETALLE -->
+<div id="screen-detalle-logistica" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="showScreen('logistica-scan')">←</button>
+        <h1>Detalle del Pedido</h1>
+    </div>
+    <div id="detalle-logistica-content"></div>
+</div>
+
+<!-- PEDIDOS OFICINA - ESCANEO -->
+<div id="screen-oficina-scan" class="screen">
+    <div class="header">
+        <button class="back-btn" onclick="goHome()">←</button>
+        <h1>🏢 Pedidos Oficina</h1>
+    </div>
+    <div style="padding:12px;">
+        <button class="btn btn-success" id="btn-iniciar-scan-oficina" onclick="iniciarScannerOficina()">📷 Escanear Pedido</button>
+        <button class="btn" style="background:#888;color:white;display:none;" id="btn-detener-scan-oficina" onclick="detenerScannerOficina()">✖️ Detener escáner</button>
+        <div id="qr-reader-oficina"></div>
+        <div id="oficina-resultado"></div>
+    </div>
+</div>
+
+<!-- ÁREA DE IMPRESIÓN -->
+<div id="print-area" style="display:none;"></div>
+
+<script>
+// ================================================================
+//  FIREBASE CONFIG — OPCIONAL. Dejá los placeholders para modo local.
+//  Cuando tengas Firebase, reemplazá estos valores.
+// ================================================================
+const firebaseConfig = {
+    apiKey:            "PEGA_TU_API_KEY",
+    authDomain:        "PEGA_TU_AUTH_DOMAIN",
+    projectId:         "PEGA_TU_PROJECT_ID",
+    storageBucket:     "PEGA_TU_STORAGE_BUCKET",
+    messagingSenderId: "PEGA_TU_SENDER_ID",
+    appId:             "PEGA_TU_APP_ID"
+};
+var useFirebase = firebaseConfig.apiKey !== "PEGA_TU_API_KEY";
+var db = null;
+if (useFirebase) {
+    try { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+    catch(e) { console.warn('Firebase error:', e.message); useFirebase = false; }
+}
+
+// ================================================================
+//  STORAGE — localStorage (modo local) o Firebase
+// ================================================================
+var LS_KEY = 'pm_pedidos';
+var LS_SEQ_KEY = 'pm_pedidos_seq';
+function lsAll()   { try { return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); } catch(e) { return []; } }
+function lsSave(a) { localStorage.setItem(LS_KEY, JSON.stringify(a)); }
+function lsNotify(){ window.dispatchEvent(new Event('pm_update')); }
+function lsNextNumero() {
+    var n = (parseInt(localStorage.getItem(LS_SEQ_KEY)||'0', 10) || 0) + 1;
+    localStorage.setItem(LS_SEQ_KEY, String(n));
+    return n;
+}
+
+var st = {
+    add: function(data) {
+        if (db) {
+            var counterRef = db.collection('meta').doc('contadorPedidos');
+            return db.runTransaction(function(tx) {
+                return tx.get(counterRef).then(function(doc) {
+                    var actual = (doc.exists && doc.data().valor) ? doc.data().valor : 0;
+                    var next = actual + 1;
+                    tx.set(counterRef, { valor: next }, { merge: true });
+                    return next;
+                });
+            }).then(function(numero) {
+                var toSave = Object.assign({}, data, {
+                    numero: numero,
+                    fecha: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                return db.collection('pedidos').add(toSave).then(function(ref){ return ref.id; });
+            });
+        }
+        var id = 'p_'+Date.now()+'_'+Math.random().toString(36).substr(2,5);
+        data.id=id; data.numero=lsNextNumero(); data.fecha=new Date().toISOString();
+        var all=lsAll(); all.unshift(data); lsSave(all); lsNotify();
+        return Promise.resolve(id);
+    },
+    update: function(id, updates) {
+        if (db) return db.collection('pedidos').doc(id).update(updates);
+        var all=lsAll(), idx=all.findIndex(function(p){ return p.id===id; });
+        if (idx>=0) {
+            Object.keys(updates).forEach(function(key) {
+                if (key.indexOf('.')>=0) {
+                    var pts=key.split('.'); if(!all[idx][pts[0]])all[idx][pts[0]]={};
+                    all[idx][pts[0]][pts[1]]=updates[key];
+                } else { all[idx][key]=updates[key]; }
+            });
+            lsSave(all); lsNotify();
+        }
+        return Promise.resolve();
+    },
+    get: function(id) {
+        if (db) return db.collection('pedidos').doc(id).get().then(function(d){ return Object.assign({id:d.id},d.data()); });
+        var p=lsAll().find(function(p){ return p.id===id; });
+        return Promise.resolve(p ? Object.assign({},p) : null);
+    },
+    remove: function(id) {
+        if (db) return db.collection('pedidos').doc(id).delete();
+        var all=lsAll(), idx=all.findIndex(function(p){ return p.id===id; });
+        if (idx>=0) { all.splice(idx,1); lsSave(all); lsNotify(); }
+        return Promise.resolve();
+    },
+    subscribe: function(filterFn, callback) {
+        if (db) {
+            return db.collection('pedidos').orderBy('fecha','desc').onSnapshot(function(snap){
+                var list=snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+                callback(filterFn ? list.filter(filterFn) : list);
+            });
+        }
+        function emit(){ var a=lsAll(); callback(filterFn?a.filter(filterFn):a); }
+        emit();
+        window.addEventListener('pm_update', emit);
+        var iv=setInterval(emit, 1500);
+        return function(){ clearInterval(iv); window.removeEventListener('pm_update',emit); };
+    }
+};
+
+// ================================================================
+//  CONSTANTES
+// ================================================================
+var ADMIN_PASS = "Nama1122";
+// Envíos que requieren DNI y CP
+var ENVIO_DNI_CP = ['VIA CARGO','CORREO','TRANSPORTE'];
+// Envío que requiere dirección física
+var ENVIO_MOTO   = 'MOTOMENSAJERIA';
+// Empleados de Armado y sus contraseñas
+var EMPLEADOS_PASS = {
+    FELIPE: 'FELI123',
+    NAHUEL: 'NAHUE456',
+    FEDE:   'FEDE789',
+    JUAN:   'JUAN1011',
+    AZUL:   'AZUL1213'
+};
+// Prefijo usado dentro del QR para identificar pedidos de esta app
+var QR_PREFIX = 'PMPED-';
+// Cuentas propias donde los clientes transfieren, usadas en Pedidos Oficina y Armado
+var CUENTAS_TRANSFERENCIA = ['GALICIA PANNO', 'BRUMMER COELSA', 'MARI GALICIA', 'MARI UALA', 'OTRAS CUENTAS'];
+function cuentaSelectOptionsHTML() {
+    return '<option value="">-- Seleccioná cuenta --</option>' +
+        CUENTAS_TRANSFERENCIA.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+}
+
+// Genera un QR como data URL PNG de forma síncrona usando qrcode-generator + canvas
+// (PNG en vez del GIF por defecto de la librería, para que sea compatible con jsPDF)
+function qrDataURL(texto, cellSize) {
+    if (typeof qrcode === 'undefined') { throw new Error('Librería de QR no disponible'); }
+    cellSize = cellSize || 5;
+    var margin = 4; // celdas de margen blanco alrededor
+    var qr = qrcode(0, 'M');
+    qr.addData(texto);
+    qr.make();
+    var count = qr.getModuleCount();
+    var size = (count + margin * 2) * cellSize;
+    var canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#000000';
+    for (var row = 0; row < count; row++) {
+        for (var col = 0; col < count; col++) {
+            if (qr.isDark(row, col)) {
+                ctx.fillRect((col + margin) * cellSize, (row + margin) * cellSize, cellSize, cellSize);
+            }
+        }
+    }
+    return canvas.toDataURL('image/png');
+}
+
+// ================================================================
+//  ESTADO
+// ================================================================
+var currentRole     = null;
+var currentPedido   = null;
+var origenEtiqueta   = 'deposito'; // 'deposito' | 'imprimir' — de dónde se entró a la pantalla de Etiqueta
+var currentAdminTab = 'pendientes';
+var currentDepTab   = 'aprobados';
+var currentVendTab  = 'pendientes';
+var unsub           = { admin: null, dep: null, vend: null, imprimir: null, log: null };
+var pendingEmpleado  = null;
+var currentEmpleado  = null;
+var html5QrScanner   = null;
+var imprimirListCache = [];
+var pendingRoleAccess = null;
+var currentImprimirTab = 'cola';
+var seleccionadosImprimir = {};
+var currentRepartidor = null;
+var html5QrScannerLog = null;
+var html5QrScannerOficina = null;
+
+// ================================================================
+//  MODAL CONTRASEÑA (Vendedor / Admin / Depósito — misma contraseña)
+// ================================================================
+var PASS_MODAL_TITLES = {
+    admin:     '👑 Acceso Admin',
+    vendedor:  '🧑‍💼 Acceso Vendedor',
+    deposito:  '🏭 Acceso Depósito',
+    imprimir:  '🖨️ Acceso Pedidos para Imprimir',
+    armado:    '🔧 Acceso Armado',
+    logistica: '🚚 Acceso Logística',
+    oficina:   '🏢 Acceso Pedidos Oficina'
+};
+function openPassModal(role) {
+    pendingRoleAccess = role || 'admin';
+    document.getElementById('pass-modal-title').textContent = PASS_MODAL_TITLES[pendingRoleAccess] || '🔐 Acceso';
+    document.getElementById('input-pass').value = '';
+    document.getElementById('pass-error').style.display = 'none';
+    document.getElementById('modal-pass').classList.add('open');
+    setTimeout(function(){ document.getElementById('input-pass').focus(); }, 100);
+}
+function closePassModal() { document.getElementById('modal-pass').classList.remove('open'); pendingRoleAccess = null; }
+function checkPass() {
+    if (document.getElementById('input-pass').value === ADMIN_PASS) {
+        var role = pendingRoleAccess || 'admin';
+        closePassModal(); setRole(role);
+    } else {
+        document.getElementById('pass-error').style.display = 'block';
+        document.getElementById('input-pass').value = '';
+    }
+}
+
+// ================================================================
+//  MODAL CONTRASEÑA EMPLEADO (ARMADO)
+// ================================================================
+function openEmpleadoPassModal(nombre) {
+    pendingEmpleado = nombre;
+    document.getElementById('empleado-pass-title').textContent = '🔐 Hola, ' + nombre;
+    document.getElementById('input-empleado-pass').value = '';
+    document.getElementById('empleado-pass-error').style.display = 'none';
+    document.getElementById('modal-empleado-pass').classList.add('open');
+    setTimeout(function(){ document.getElementById('input-empleado-pass').focus(); }, 100);
+}
+function closeEmpleadoPassModal() {
+    document.getElementById('modal-empleado-pass').classList.remove('open');
+    pendingEmpleado = null;
+}
+function checkEmpleadoPass() {
+    var val = document.getElementById('input-empleado-pass').value;
+    if (pendingEmpleado && EMPLEADOS_PASS[pendingEmpleado] === val) {
+        currentEmpleado = pendingEmpleado;
+        closeEmpleadoPassModal();
+        prepararScreenArmado();
+        showScreen('armado-scan');
+    } else {
+        document.getElementById('empleado-pass-error').style.display = 'block';
+        document.getElementById('input-empleado-pass').value = '';
+    }
+}
+
+// ================================================================
+//  NAVEGACIÓN
+// ================================================================
+function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+    document.getElementById('screen-' + name).classList.add('active');
+    window.scrollTo(0, 0);
+}
+function goHome() {
+    Object.keys(unsub).forEach(function(k){ if(unsub[k]){ unsub[k](); unsub[k]=null; } });
+    detenerScanner();
+    detenerScannerLog();
+    detenerScannerOficina();
+    currentEmpleado = null;
+    currentRepartidor = null;
+    showScreen('inicio');
+}
+function setRole(role) {
+    currentRole = role;
+    if (role === 'armado')     { showScreen('armado-login'); return; }
+    if (role === 'logistica')  { showScreen('logistica-login'); return; }
+    if (role === 'oficina')    { prepararScreenOficina(); showScreen('oficina-scan'); return; }
+    showScreen(role);
+    if (role === 'admin')    loadAdminPedidos('pendientes');
+    if (role === 'deposito') loadDepPedidos('aprobados');
+    if (role === 'imprimir') { currentImprimirTab='cola'; seleccionadosImprimir={}; loadImprimirPedidos(); }
+}
+
+// ================================================================
+//  TABS
+// ================================================================
+function setActiveTabs(screenId, order, active) {
+    document.querySelectorAll('#' + screenId + ' .tab').forEach(function(t, i){
+        t.classList.toggle('active', order[i] === active);
+    });
+}
+function showVendTab(tab)  { currentVendTab=tab;  setActiveTabs('screen-vendedor',['pendientes','aprobados','todos'],tab); loadVendedorPedidos(); }
+function showAdminTab(tab) { currentAdminTab=tab; setActiveTabs('screen-admin',['pendientes','aprobados','todos'],tab); loadAdminPedidos(tab); }
+function showDepTab(tab)   { currentDepTab=tab;   setActiveTabs('screen-deposito',['aprobados','armados','porimprimir'],tab); loadDepPedidos(tab); }
+
+// ================================================================
+//  HELPERS
+// ================================================================
+function fmt(n) { return n ? '$' + Number(n).toLocaleString('es-AR') : '-'; }
+function row(label, value) {
+    if (!value || value === '-') return '';
+    return '<div class="detail-row"><span class="d-label">'+label+'</span><span class="d-value">'+value+'</span></div>';
+}
+function emptyState(msg) {
+    return '<div class="empty-state"><div class="empty-icon">📭</div><p>'+msg+'</p></div>';
+}
+
+// ================================================================
+//  AGRUPAR LISTAS POR DÍA (para que no se mezclen pedidos de días distintos)
+// ================================================================
+// Todos los campos de fecha "de evento" (fechaArmado, fechaAsignado, fechaImpreso,
+// fechaEntregado) se guardan con toLocaleString('es-AR'), formato "D/M/YYYY, HH:MM:SS".
+// fechaStr (fecha de creación) se guarda sin hora: "D/M/YYYY". En ambos casos la
+// parte de fecha es lo que va antes de la primera coma.
+function diaKeyDesdeString(str) {
+    if (!str) return null;
+    var s = String(str).split(',')[0].trim();
+    return s || null;
+}
+// Convierte "D/M/YYYY" o "D/M/YYYY, HH:MM:SS" a un timestamp numérico real,
+// para poder ordenar correctamente (una comparación de texto simple falla,
+// por ejemplo, entre "9/7/2026" y "10/7/2026").
+function timestampDesdeString(str) {
+    if (!str) return 0;
+    var partes = String(str).split(',');
+    var dmy = partes[0].trim().split('/');
+    if (dmy.length < 3) return 0;
+    var d = parseInt(dmy[0],10)||1, m = parseInt(dmy[1],10)||1, y = parseInt(dmy[2],10)||1970;
+    var hms = (partes[1]||'').trim().split(':');
+    var hh = parseInt(hms[0],10)||0, mm = parseInt(hms[1],10)||0, ss = parseInt(hms[2],10)||0;
+    return new Date(y, m-1, d, hh, mm, ss).getTime();
+}
+function encabezadoDia(diaKey) {
+    if (!diaKey) return '📅 Sin fecha';
+    var hoy = new Date().toLocaleDateString('es-AR');
+    var ayerDate = new Date(); ayerDate.setDate(ayerDate.getDate() - 1);
+    var ayer = ayerDate.toLocaleDateString('es-AR');
+    if (diaKey === hoy) return '📅 Hoy · ' + diaKey;
+    if (diaKey === ayer) return '📅 Ayer · ' + diaKey;
+    return '📅 ' + diaKey;
+}
+// Arma el HTML de una lista de pedidos ya ordenada, agrupada con un encabezado
+// por cada día (usando `campoFecha`, con fallback a fechaStr si ese campo no
+// existe en un pedido puntual).
+function agruparPorDiaHTML(list, campoFecha, renderItemFn) {
+    if (!list || !list.length) return '';
+    var grupos = {}, orden = [];
+    list.forEach(function(p) {
+        var raw = (campoFecha && p[campoFecha]) || p.fechaStr || '';
+        var key = diaKeyDesdeString(raw) || 'sin-fecha';
+        if (!grupos[key]) { grupos[key] = []; orden.push(key); }
+        grupos[key].push(p);
+    });
+    return orden.map(function(key) {
+        var etiquetaDia = key === 'sin-fecha' ? encabezadoDia(null) : encabezadoDia(key);
+        return '<div class="section-divider" style="margin:14px 12px 6px;">' + etiquetaDia + '</div>' +
+               grupos[key].map(renderItemFn).join('');
+    }).join('');
+}
+
+// ================================================================
+//  FILTRO DE FECHA (casilla de selección por sección)
+// ================================================================
+var filtroFechaState = { vendedor:'todas', admin:'todas', dep:'todas', imprimir:'todas', logistica:'todas' };
+
+// Repuebla el <select> de fechas de una sección con los días presentes en `listaCompleta`
+// (antes de filtrar), preservando la selección actual si sigue siendo válida.
+function actualizarSelectFechas(selectId, listaCompleta, campoFecha, filtroKey) {
+    var select = document.getElementById(selectId);
+    if (!select) return;
+    var vistos = {}, dias = [];
+    listaCompleta.forEach(function(p) {
+        var raw = (campoFecha && p[campoFecha]) || p.fechaStr || '';
+        var key = diaKeyDesdeString(raw);
+        if (key && !vistos[key]) { vistos[key] = true; dias.push(key); }
+    });
+    dias.sort(function(a,b){ return timestampDesdeString(b) - timestampDesdeString(a); });
+
+    var actual = filtroFechaState[filtroKey] || 'todas';
+    if (actual !== 'todas' && dias.indexOf(actual) === -1) actual = 'todas';
+    filtroFechaState[filtroKey] = actual;
+
+    select.innerHTML = '<option value="todas">Todas las fechas</option>' +
+        dias.map(function(d){
+            var etiqueta = encabezadoDia(d).replace('📅 ', '');
+            return '<option value="'+d+'"'+(d===actual?' selected':'')+'>'+etiqueta+'</option>';
+        }).join('');
+}
+
+// Filtra `list` al día elegido en el <select> de esa sección (o la deja igual si es "todas")
+function aplicarFiltroFecha(list, campoFecha, filtroKey) {
+    var actual = filtroFechaState[filtroKey] || 'todas';
+    if (actual === 'todas') return list;
+    return list.filter(function(p) {
+        var raw = (campoFecha && p[campoFecha]) || p.fechaStr || '';
+        return diaKeyDesdeString(raw) === actual;
+    });
+}
+
+// Se llama desde el onchange de cada <select> de fecha
+function cambiarFiltroFecha(filtroKey, selectId) {
+    var select = document.getElementById(selectId);
+    filtroFechaState[filtroKey] = select.value;
+    if (filtroKey==='vendedor')  loadVendedorPedidos();
+    if (filtroKey==='admin')     loadAdminPedidos(currentAdminTab);
+    if (filtroKey==='dep')       loadDepPedidos(currentDepTab);
+    if (filtroKey==='imprimir')  loadImprimirPedidos();
+    if (filtroKey==='logistica') loadLogisticaLista();
+}
+
+function selectFechaHTML(selectId, filtroKey) {
+    return '<div style="padding:10px 12px 0;">'+
+        '<select id="'+selectId+'" onchange="cambiarFiltroFecha(\''+filtroKey+'\',\''+selectId+'\')" '+
+        'style="width:100%;padding:11px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;background:#fafafa;">'+
+        '<option value="todas">Todas las fechas</option>'+
+        '</select>'+
+    '</div>';
+}
+
+function necesitaDniCp(envio) { return ENVIO_DNI_CP.indexOf(envio) >= 0; }
+function esMoto(envio) { return envio === ENVIO_MOTO; }
+
+function pedidoItemHTML(p, fn) {
+    var estado  = (p.estado||'').toLowerCase();
+    var esModif = p.modificado && (p.estado==='PENDIENTE'||p.estado==='APROBADO');
+    var clsExtra = esModif ? ' modificado-border' : (' '+estado);
+    return '<div class="pedido-item'+clsExtra+'" onclick="'+fn+'(\''+p.id+'\')">'+
+        '<div class="pedido-top">'+
+            '<h3>'+(p.numero?'<span style="color:#1F3864;">#'+p.numero+'</span> ':'')+(p.cliente&&p.cliente.nombre||'-')+'</h3>'+
+            '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+                (esModif ? '<span class="badge badge-modificado">⚠️ MODIFICADO</span>' : '')+
+                '<span class="badge badge-'+estado+'">'+p.estado+'</span>'+
+                (p.paraImprimir ? '<span class="badge" style="background:#EDE3F7;color:#5B2C87;">🖨️ EN COLA</span>' : '')+
+                (p.cambioDevuelve ? '<span class="badge" style="background:#FFE1E1;color:#E74C3C;">🔄 CAMBIO</span>' : '')+
+                (p.rebotadoPorDeposito && p.estado==='RECHAZADO' ? '<span class="badge" style="background:#FDEBD0;color:#B9770E;">🚫 SIN STOCK</span>' : '')+
+            '</div>'+
+        '</div>'+
+        '<p>'+p.vendedor+' · '+(p.envio||p.tipoEnvio||'')+'</p>'+
+        '<p style="margin-top:3px;font-size:13px;color:#555;">'+(p.detalle||'').substring(0,60)+(p.detalle&&p.detalle.length>60?'...':'')+'</p>'+
+        (p.pago&&p.pago.resta ? '<p style="color:#E74C3C;font-weight:700;margin-top:4px;">Resta: $'+Number(p.pago.resta).toLocaleString('es-AR')+'</p>' : '')+
+        (p.armadoPor ? '<p style="color:#16A085;font-size:12px;font-weight:700;margin-top:4px;">🔧 Armado por: '+p.armadoPor+'</p>' : '')+
+        (p.repartidor ? '<p style="color:#2C82C9;font-size:12px;font-weight:700;margin-top:4px;">🚚 Reparte: '+p.repartidor+'</p>' : '')+
+        (p.pagoEntrega ? '<p style="color:#D35400;font-size:12px;font-weight:700;margin-top:4px;">🏢 '+p.pagoEntrega+'</p>' : '')+
+        (esModif ? '<div class="alerta-item">⚠️ El cliente modificó este pedido — revisá antes de armar</div>' : '')+
+    '</div>';
+}
+
+// ================================================================
+//  NUEVO PEDIDO — CAMPOS DINÁMICOS
+// ================================================================
+function toggleCampos() {
+    var envio   = document.getElementById('form-envio').value;
+    var dniCp   = necesitaDniCp(envio);
+    var moto    = esMoto(envio);
+    var ciudad  = dniCp; // VIA CARGO/CORREO/TRANSPORTE también muestran ciudad
+
+    document.getElementById('grp-dni').style.display    = dniCp  ? 'block' : 'none';
+    document.getElementById('grp-cp').style.display     = dniCp  ? 'block' : 'none';
+    document.getElementById('grp-moto').style.display   = moto   ? 'block' : 'none';
+    document.getElementById('grp-ciudad').style.display = ciudad ? 'block' : 'none';
+}
+
+// ================================================================
+//  SUBMIT PEDIDO
+// ================================================================
+async function submitPedido() {
+    var envio    = document.getElementById('form-envio').value;
+    var vendedor = document.getElementById('form-vendedor').value;
+    var nombre   = document.getElementById('form-nombre').value.trim();
+    var tel      = document.getElementById('form-tel').value.trim();
+    var detalle  = document.getElementById('form-detalle').value.trim();
+    var dni      = document.getElementById('form-dni').value.trim();
+    var cp       = document.getElementById('form-cp').value.trim();
+    var dir      = document.getElementById('form-dir').value.trim();
+    var loc      = document.getElementById('form-loc').value.trim();
+    var entre    = document.getElementById('form-entre').value.trim();
+    var notas    = document.getElementById('form-notas').value.trim();
+    var ciudad   = document.getElementById('form-ciudad').value.trim();
+
+    if (!envio)    return alert('Seleccioná el método de envío');
+    if (!vendedor) return alert('Seleccioná tu nombre');
+    if (!nombre)   return alert('Ingresá el nombre del cliente');
+    if (!tel)      return alert('Ingresá el teléfono');
+    if (necesitaDniCp(envio) && !dni)    return alert('El DNI es obligatorio para '+envio);
+    if (necesitaDniCp(envio) && !cp)     return alert('El CP es obligatorio para '+envio);
+    if (necesitaDniCp(envio) && !ciudad) return alert('La Ciudad / Localidad es obligatoria para '+envio);
+    if (esMoto(envio) && !dir)   return alert('La Dirección es obligatoria para '+envio);
+    if (esMoto(envio) && !loc)   return alert('La Localidad es obligatoria para '+envio);
+    if (esMoto(envio) && !entre) return alert('Las Entre calles son obligatorias para '+envio);
+    if (esMoto(envio) && !notas) return alert('Las Notas de entrega son obligatorias para '+envio);
+    if (!detalle)  return alert('Ingresá el detalle del pedido');
+
+    var pedido = {
+        vendedor: vendedor, envio: envio, tipoEnvio: envio,
+        cliente: {
+            nombre: nombre, tel: tel, dni: dni||'', cp: cp||'',
+            dir:   esMoto(envio) ? dir   : '',
+            loc:   esMoto(envio) ? loc   : (ciudad||''),
+            entre: esMoto(envio) ? entre : '',
+            notas: esMoto(envio) ? notas : '',
+        },
+        detalle: detalle,
+        cambioDevuelve: document.getElementById('form-cambio-devuelve').value.trim(),
+        pago: {
+            sena:    Number(document.getElementById('form-sena').value)    || 0,
+            resta:   Number(document.getElementById('form-resta').value)   || 0,
+            abonado: Number(document.getElementById('form-abonado').value) || 0,
+            cuenta:  document.getElementById('form-cuenta').value.trim()   || '',
+        },
+        notaAdmin: document.getElementById('form-nota-admin').value.trim(),
+        estado: 'PENDIENTE', modificado: false, notaRecotiz: '', notaModificacion: '',
+        paraImprimir: false, armadoPor: '',
+        fechaStr: new Date().toLocaleDateString('es-AR'),
+    };
+
+    try {
+        await st.add(pedido);
+        alert('✅ Pedido enviado. Mateo lo revisará pronto.');
+        resetForm(); showScreen('vendedor');
+    } catch(e) { alert('Error al guardar: '+e.message); }
+}
+
+function resetForm() {
+    ['form-envio','form-vendedor','form-nombre','form-dni','form-tel','form-cp',
+     'form-dir','form-loc','form-entre','form-notas','form-ciudad',
+     'form-detalle','form-nota-admin','form-cambio-devuelve','form-sena','form-resta','form-abonado','form-cuenta']
+    .forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    ['grp-dni','grp-cp','grp-moto','grp-ciudad'].forEach(function(id){
+        document.getElementById(id).style.display='none';
+    });
+}
+
+// ================================================================
+//  VENDEDOR — LISTA
+// ================================================================
+function loadVendedorPedidos() {
+    var v = document.getElementById('select-vendedor').value;
+    if (!v) return;
+    if (unsub.vend) { unsub.vend(); unsub.vend=null; }
+    unsub.vend = st.subscribe(function(p){ return p.vendedor===v; }, function(list){
+        if (currentVendTab==='pendientes') list=list.filter(function(p){ return p.estado==='PENDIENTE'||p.estado==='RECHAZADO'; });
+        if (currentVendTab==='aprobados')  list=list.filter(function(p){ return ['APROBADO','ARMADO','ENTREGADO'].indexOf(p.estado)>=0; });
+        list.sort(function(a,b){ return (b.fecha||'') > (a.fecha||'') ? 1 : -1; });
+        actualizarSelectFechas('filtro-fecha-vendedor', list, 'fechaStr', 'vendedor');
+        list = aplicarFiltroFecha(list, 'fechaStr', 'vendedor');
+        var el=document.getElementById('vend-list');
+        if(!list.length){ el.innerHTML=emptyState('No hay pedidos aquí'); return; }
+        el.innerHTML=agruparPorDiaHTML(list, 'fechaStr', function(p){ return pedidoItemHTML(p,'vendClick'); });
+    });
+}
+
+function vendClick(id) {
+    st.get(id).then(function(p){
+        currentPedido=p;
+        renderDetalleVend(currentPedido);
+        showScreen('detalle-vend');
+    });
+}
+
+function renderDetalleVend(p) {
+    var c = p.cliente || {};
+    var pg = p.pago   || {};
+    var puedeModificar = p.estado==='APROBADO' || p.estado==='ARMADO' || (p.estado==='RECHAZADO' && p.rebotadoPorDeposito);
+    var envio = p.envio || p.tipoEnvio || '';
+
+    document.getElementById('detalle-vend-content').innerHTML =
+        '<div class="card">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+                '<h2 style="font-size:18px;">'+(p.numero?'#'+p.numero+' · ':'')+(c.nombre||'-')+'</h2>'+
+                '<span class="badge badge-'+(p.estado||'').toLowerCase()+'">'+p.estado+'</span>'+
+            '</div>'+
+            row('N° de pedido', p.numero?('#'+p.numero):'')+
+            row('Vendedor', p.vendedor)+
+            row('Envío', envio)+
+            row('Teléfono', c.tel)+
+            (c.dni  ? row('DNI',     c.dni)  : '')+
+            (c.cp   ? row('CP',      c.cp)   : '')+
+            (c.dir  ? row('Dirección', c.dir) : '')+
+            (c.loc  ? row('Localidad', c.loc) : '')+
+            (c.entre? row('Entre calles', c.entre) : '')+
+            (c.notas? row('Notas', c.notas) : '')+
+        '</div>'+
+        '<div class="card">'+
+            '<h3>📱 Detalle del pedido</h3>'+
+            '<p style="font-size:15px;line-height:1.7;white-space:pre-wrap;">'+(p.detalle||'-')+'</p>'+
+        '</div>'+
+        (p.cambioDevuelve ?
+        '<div class="card">'+
+            '<h3 style="color:#E74C3C;">🔄 Cambio devuelve</h3>'+
+            '<p style="font-size:15px;line-height:1.7;white-space:pre-wrap;">'+p.cambioDevuelve+'</p>'+
+        '</div>'
+        : '')+
+        (pg.sena||pg.resta||pg.abonado||pg.cuenta ?
+        '<div class="card">'+
+            '<h3>💰 Pago</h3>'+
+            '<div class="pagos-grid">'+
+                (pg.sena    ? '<div class="pago-box"><div class="p-label">Seña</div><div class="p-val">$'+Number(pg.sena).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.resta   ? '<div class="pago-box"><div class="p-label">Resta</div><div class="p-val" style="color:#E74C3C;">$'+Number(pg.resta).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.abonado ? '<div class="pago-box"><div class="p-label">Abonado</div><div class="p-val" style="color:#27AE60;">$'+Number(pg.abonado).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.cuenta  ? '<div class="pago-box" style="grid-column:span 2;"><div class="p-label">Cuenta</div><div class="p-val" style="font-size:14px;">'+pg.cuenta+'</div></div>' : '')+
+            '</div>'+
+        '</div>'
+        : '')+
+        (p.rebotadoPorDeposito && p.estado==='RECHAZADO' ?
+        '<div class="card"><div class="nota-rech">🚫 Depósito rebotó este pedido — falta stock de: <b>'+(p.productoFaltante||'-')+'</b>'+
+            (p.notaRecotiz ? '<br>'+p.notaRecotiz : '')+'</div></div>'
+        : (p.notaRecotiz ? '<div class="card"><div class="nota-'+(p.estado==='RECHAZADO'?'rech':'admin')+'">'+
+            (p.estado==='RECHAZADO'?'❌':'💬')+' '+p.notaRecotiz+'</div></div>' : ''))+
+
+        (puedeModificar ?
+        '<div class="card">'+
+            '<h3>✏️ Modificar pedido (el cliente cambió algo)</h3>'+
+            '<div class="form-group"><label>Teléfono</label><input type="tel" id="mod-tel" value="'+(c.tel||'')+'"></div>'+
+            (c.dni||necesitaDniCp(envio) ? '<div class="form-group"><label>DNI</label><input type="text" id="mod-dni" value="'+(c.dni||'')+'"></div>' : '<input type="hidden" id="mod-dni" value="'+(c.dni||'')+'">')+
+            (c.cp||necesitaDniCp(envio)  ? '<div class="form-group"><label>CP</label><input type="text" id="mod-cp" value="'+(c.cp||'')+'"></div>'   : '<input type="hidden" id="mod-cp" value="'+(c.cp||'')+'">')+
+            (esMoto(envio) ? '<div class="form-group"><label>Dirección</label><input type="text" id="mod-dir" value="'+(c.dir||'')+'"></div>' : '<input type="hidden" id="mod-dir" value="'+(c.dir||'')+'">')+
+            (esMoto(envio)||c.loc ? '<div class="form-group"><label>Localidad</label><input type="text" id="mod-loc" value="'+(c.loc||'')+'"></div>' : '<input type="hidden" id="mod-loc" value="'+(c.loc||'')+'">')+
+            (esMoto(envio) ? '<div class="form-group"><label>Entre calles</label><input type="text" id="mod-entre" value="'+(c.entre||'')+'"></div>' : '<input type="hidden" id="mod-entre" value="'+(c.entre||'')+'">')+
+            (esMoto(envio) ? '<div class="form-group"><label>Notas de entrega</label><textarea id="mod-notas">'+(c.notas||'')+'</textarea></div>' : '<input type="hidden" id="mod-notas" value="'+(c.notas||'')+'">')+
+            '<div class="form-group"><label>Detalle del pedido</label><textarea id="mod-detalle" rows="3">'+(p.detalle||'')+'</textarea></div>'+
+            '<div class="form-group"><label style="font-weight:900;color:#E74C3C;font-size:13px;">🔄 Cambio devuelve</label><textarea id="mod-cambio-devuelve" placeholder="Productos que el cliente devuelve (si corresponde)">'+(p.cambioDevuelve||'')+'</textarea></div>'+
+            '<div class="form-group"><label>Seña</label><input type="number" id="mod-sena" value="'+(pg.sena||0)+'"></div>'+
+            '<div class="form-group"><label>Resta abonar</label><input type="number" id="mod-resta" value="'+(pg.resta||0)+'"></div>'+
+            '<div class="form-group"><label>Monto abonado</label><input type="number" id="mod-abonado" value="'+(pg.abonado||0)+'"></div>'+
+            '<div class="form-group"><label>Cuenta en donde pagó</label><input type="text" id="mod-cuenta" value="'+(pg.cuenta||'')+'"></div>'+
+            '<div class="form-group"><label>Qué cambió (para Mateo y depósito) <span class="obl">*</span></label>'+
+                '<textarea id="mod-nota-cambio" placeholder="Ej: El cliente cambió la dirección de entrega"></textarea></div>'+
+            '<button class="btn btn-danger" onclick="guardarModificacion()">⚠️ ENVIAR MODIFICACIÓN</button>'+
+        '</div>'
+        : '')+
+        '<div class="card">'+
+            '<button class="btn" style="background:#E74C3C;color:white;" onclick="eliminarPedidoVendedor(\''+p.id+'\')">🗑️ Eliminar pedido</button>'+
+        '</div>';
+}
+
+async function eliminarPedidoVendedor(id) {
+    if (!confirm('¿Seguro que querés eliminar este pedido? Esta acción no se puede deshacer.')) return;
+    await st.remove(id);
+    showScreen('vendedor');
+}
+
+async function guardarModificacion() {
+    var notaCambio = (document.getElementById('mod-nota-cambio')||{}).value;
+    if (!notaCambio||!notaCambio.trim()) return alert('Describí qué cambió para avisar a Mateo y depósito');
+
+    var envio    = currentPedido.envio || currentPedido.tipoEnvio || '';
+    var telVal   = document.getElementById('mod-tel').value.trim();
+    var dniVal   = document.getElementById('mod-dni').value.trim();
+    var cpVal    = document.getElementById('mod-cp').value.trim();
+    var dirVal   = document.getElementById('mod-dir').value.trim();
+    var locVal   = document.getElementById('mod-loc').value.trim();
+    var entreVal = document.getElementById('mod-entre').value.trim();
+    var notasVal = document.getElementById('mod-notas').value.trim();
+
+    if (!telVal) return alert('El teléfono es obligatorio');
+    if (necesitaDniCp(envio) && !dniVal) return alert('El DNI es obligatorio para '+envio);
+    if (necesitaDniCp(envio) && !cpVal)  return alert('El CP es obligatorio para '+envio);
+    if (necesitaDniCp(envio) && !locVal) return alert('La Ciudad / Localidad es obligatoria para '+envio);
+    if (esMoto(envio) && !dirVal)   return alert('La Dirección es obligatoria para '+envio);
+    if (esMoto(envio) && !locVal)   return alert('La Localidad es obligatoria para '+envio);
+    if (esMoto(envio) && !entreVal) return alert('Las Entre calles son obligatorias para '+envio);
+    if (esMoto(envio) && !notasVal) return alert('Las Notas de entrega son obligatorias para '+envio);
+
+    if (!confirm('⚠️ Esto avisa a Mateo y al depósito que hay una modificación. ¿Confirmás?')) return;
+    var c = currentPedido.cliente||{};
+    await st.update(currentPedido.id, {
+        estado: 'PENDIENTE', modificado: true,
+        notaModificacion: notaCambio.trim(),
+        detalle: document.getElementById('mod-detalle').value.trim() || currentPedido.detalle,
+        cambioDevuelve: document.getElementById('mod-cambio-devuelve').value.trim(),
+        'pago.sena':    Number(document.getElementById('mod-sena').value)    || 0,
+        'pago.resta':   Number(document.getElementById('mod-resta').value)   || 0,
+        'pago.abonado': Number(document.getElementById('mod-abonado').value) || 0,
+        'pago.cuenta':  document.getElementById('mod-cuenta').value.trim()   || '',
+        'cliente.tel':   document.getElementById('mod-tel').value.trim()   || c.tel,
+        'cliente.dni':   document.getElementById('mod-dni').value.trim()   || c.dni,
+        'cliente.cp':    document.getElementById('mod-cp').value.trim()    || c.cp,
+        'cliente.dir':   document.getElementById('mod-dir').value.trim()   || c.dir,
+        'cliente.loc':   document.getElementById('mod-loc').value.trim()   || c.loc,
+        'cliente.entre': document.getElementById('mod-entre').value.trim() || c.entre,
+        'cliente.notas': document.getElementById('mod-notas').value.trim() || c.notas,
+    });
+    alert('✅ Modificación enviada.\nMateo la va a revisar y depósito recibirá el aviso.');
+    showScreen('vendedor');
+}
+
+// ================================================================
+//  ADMIN — LISTA
+// ================================================================
+function loadAdminPedidos(tab) {
+    if (unsub.admin) { unsub.admin(); unsub.admin=null; }
+    unsub.admin = st.subscribe(null, function(list){
+        if(tab==='pendientes') list=list.filter(function(p){ return p.estado==='PENDIENTE'; });
+        if(tab==='aprobados')  list=list.filter(function(p){ return p.estado==='APROBADO'||p.estado==='ARMADO'; });
+        // Ordena por fecha (para que los días queden agrupados de forma contigua) y,
+        // dentro de un mismo momento, prioriza los modificados como desempate.
+        list.sort(function(a,b){
+            var fa = a.fecha||'', fb = b.fecha||'';
+            if (fb > fa) return 1;
+            if (fb < fa) return -1;
+            return (b.modificado?1:0)-(a.modificado?1:0);
+        });
+        actualizarSelectFechas('filtro-fecha-admin', list, 'fechaStr', 'admin');
+        list = aplicarFiltroFecha(list, 'fechaStr', 'admin');
+        var el=document.getElementById('admin-list');
+        if(!list.length){ el.innerHTML=emptyState('No hay pedidos aquí'); return; }
+        el.innerHTML=agruparPorDiaHTML(list, 'fechaStr', function(p){ return pedidoItemHTML(p,'adminClick'); });
+    });
+}
+
+function adminClick(id) {
+    st.get(id).then(function(p){
+        currentPedido=p;
+        renderDetalleAdmin(currentPedido);
+        showScreen('detalle-admin');
+    });
+}
+
+function renderDetalleAdmin(p) {
+    var c   = p.cliente||{};
+    var pg  = p.pago   ||{};
+    var isPend  = p.estado==='PENDIENTE';
+    var esModif = p.modificado && isPend;
+
+    document.getElementById('detalle-admin-content').innerHTML =
+        (esModif ?
+        '<div class="banner-mod">⚠️ PEDIDO MODIFICADO POR EL VENDEDOR<br>'+
+        '<small style="font-weight:normal;">'+(p.notaModificacion||'')+'</small></div>' : '')+
+
+        '<div class="card">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+                '<h2 style="font-size:20px;">'+(p.numero?'#'+p.numero+' · ':'')+(c.nombre||'-')+'</h2>'+
+                '<span class="badge badge-'+(p.estado||'').toLowerCase()+'">'+p.estado+'</span>'+
+            '</div>'+
+            row('N° de pedido', p.numero?('#'+p.numero):'')+
+            row('Vendedor', p.vendedor)+
+            row('Envío', p.envio||p.tipoEnvio||'')+
+            row('Teléfono', c.tel)+
+            (c.dni   ? row('DNI',          c.dni)   : '')+
+            (c.cp    ? row('CP',           c.cp)    : '')+
+            (c.dir   ? row('Dirección',    c.dir)   : '')+
+            (c.loc   ? row('Localidad',    c.loc)   : '')+
+            (c.entre ? row('Entre calles', c.entre) : '')+
+            (c.notas ? row('Notas',        c.notas) : '')+
+        '</div>'+
+
+        '<div class="card">'+
+            '<h3>📱 Detalle del pedido</h3>'+
+            '<p style="font-size:15px;line-height:1.7;white-space:pre-wrap;">'+(p.detalle||'-')+'</p>'+
+        '</div>'+
+
+        (p.cambioDevuelve ?
+        '<div class="card">'+
+            '<h3 style="color:#E74C3C;">🔄 Cambio devuelve</h3>'+
+            '<p style="font-size:15px;line-height:1.7;white-space:pre-wrap;">'+p.cambioDevuelve+'</p>'+
+        '</div>'
+        : '')+
+
+        (pg.sena||pg.resta||pg.abonado||pg.cuenta ?
+        '<div class="card">'+
+            '<h3>💰 Pago</h3>'+
+            '<div class="pagos-grid">'+
+                (pg.sena    ? '<div class="pago-box"><div class="p-label">Seña</div><div class="p-val">$'+Number(pg.sena).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.resta   ? '<div class="pago-box"><div class="p-label">Resta</div><div class="p-val" style="color:#E74C3C;">$'+Number(pg.resta).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.abonado ? '<div class="pago-box"><div class="p-label">Abonado</div><div class="p-val" style="color:#27AE60;">$'+Number(pg.abonado).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.cuenta  ? '<div class="pago-box" style="grid-column:span 2;"><div class="p-label">Cuenta</div><div class="p-val" style="font-size:14px;">'+pg.cuenta+'</div></div>' : '')+
+            '</div>'+
+        '</div>'
+        : '')+
+
+        (p.notaAdmin ? '<div class="card"><div class="nota-admin">📝 '+p.notaAdmin+'</div></div>' : '')+
+
+        (isPend ?
+        '<div class="card">'+
+            '<h3>'+(esModif?'✏️ Re-aprobar':'✏️ Aprobar / Rechazar')+'</h3>'+
+            '<div class="form-group"><label>Nota para el vendedor</label>'+
+                '<textarea id="admin-nota" placeholder="Precio ok, aprobado...">'+(p.notaRecotiz||'')+'</textarea></div>'+
+            '<button class="btn btn-success" onclick="aprobarPedido()">✅ APROBAR</button>'+
+            '<button class="btn btn-danger"  onclick="rechazarPedido()">❌ RECHAZAR</button>'+
+        '</div>'
+        :
+        '<div style="padding:8px 12px;">'+
+            (p.estado==='APROBADO' ? '<button class="btn btn-warning" onclick="cambiarEstado(\'ARMADO\')">📦 Marcar como ARMADO</button>' : '')+
+            (p.estado==='ARMADO'   ? '<button class="btn btn-success" onclick="cambiarEstado(\'ENTREGADO\')">🚀 Marcar como ENTREGADO</button>' : '')+
+        '</div>');
+}
+
+async function aprobarPedido() {
+    var nota = document.getElementById('admin-nota').value.trim();
+    await st.update(currentPedido.id, { estado:'APROBADO', notaRecotiz:nota });
+    alert(currentPedido.modificado
+        ? '✅ Pedido re-aprobado.\n⚠️ Depósito verá "PEDIDO YA ARMADO — TIRAR ETIQUETA ANTERIOR".'
+        : '✅ Pedido aprobado — ya aparece en Depósito');
+    showScreen('admin');
+}
+async function rechazarPedido() {
+    var nota = document.getElementById('admin-nota').value.trim();
+    if (!nota) return alert('Escribí el motivo del rechazo');
+    await st.update(currentPedido.id, { estado:'RECHAZADO', notaRecotiz:nota, modificado:false });
+    alert('❌ Pedido rechazado'); showScreen('admin');
+}
+async function cambiarEstado(estado) {
+    await st.update(currentPedido.id, { estado:estado });
+    showScreen('admin');
+}
+
+// ================================================================
+//  DEPÓSITO — LISTA
+// ================================================================
+function loadDepPedidos(tab) {
+    if (unsub.dep) { unsub.dep(); unsub.dep=null; }
+    var filterFn;
+    var campoFecha = 'fechaStr';
+    if (tab === 'porimprimir') {
+        filterFn = function(p){ return !!p.paraImprimir; };
+    } else if (tab === 'armados') {
+        filterFn = function(p){ return p.estado==='ARMADO'; };
+        campoFecha = 'fechaArmado';
+    } else {
+        filterFn = function(p){ return p.estado==='APROBADO'; };
+    }
+    unsub.dep = st.subscribe(filterFn, function(list){
+        // Ordena por el campo de fecha relevante de esta pestaña (para que los
+        // días queden agrupados) y usa "modificado" solo como desempate.
+        list.sort(function(a,b){
+            var ta = timestampDesdeString(a[campoFecha]||a.fechaStr||'');
+            var tb = timestampDesdeString(b[campoFecha]||b.fechaStr||'');
+            if (tb !== ta) return tb - ta;
+            return (b.modificado?1:0)-(a.modificado?1:0);
+        });
+        actualizarSelectFechas('filtro-fecha-dep', list, campoFecha, 'dep');
+        list = aplicarFiltroFecha(list, campoFecha, 'dep');
+        var el=document.getElementById('dep-list');
+        if(!list.length){ el.innerHTML=emptyState('No hay pedidos'); return; }
+        el.innerHTML=agruparPorDiaHTML(list, campoFecha, function(p){ return pedidoItemHTML(p,'depClick'); });
+    });
+}
+
+async function depClick(id) {
+    var p = await st.get(id);
+    currentPedido = p;
+    origenEtiqueta = 'deposito';
+    await renderEtiqueta(currentPedido);
+    showScreen('etiqueta');
+}
+
+// ================================================================
+//  PEDIDOS PARA IMPRIMIR
+// ================================================================
+function showImprimirTab(tab) {
+    currentImprimirTab = tab;
+    setActiveTabs('screen-imprimir', ['cola','impresos'], tab);
+    document.getElementById('imprimir-cola-controles').style.display = (tab==='cola') ? 'block' : 'none';
+    loadImprimirPedidos();
+}
+
+function loadImprimirPedidos() {
+    if (unsub.imprimir) { unsub.imprimir(); unsub.imprimir=null; }
+    var filterFn = currentImprimirTab === 'impresos'
+        ? function(p){ return !!p.impreso; }
+        : function(p){ return !!p.paraImprimir && !p.impreso; };
+    var campoFecha = currentImprimirTab === 'impresos' ? 'fechaImpreso' : 'fechaStr';
+    unsub.imprimir = st.subscribe(filterFn, function(list){
+        list.sort(function(a,b){
+            var ta = timestampDesdeString(a[campoFecha]||a.fechaStr||'');
+            var tb = timestampDesdeString(b[campoFecha]||b.fechaStr||'');
+            return tb - ta;
+        });
+        actualizarSelectFechas('filtro-fecha-imprimir', list, campoFecha, 'imprimir');
+        list = aplicarFiltroFecha(list, campoFecha, 'imprimir');
+        imprimirListCache = list;
+        var el  = document.getElementById('imprimir-list');
+        var btn = document.getElementById('btn-descargar-pdf');
+
+        if (currentImprimirTab === 'impresos') {
+            if (btn) btn.disabled = true;
+            if(!list.length){ el.innerHTML=emptyState('Todavía no imprimiste ningún pedido'); return; }
+            el.innerHTML=agruparPorDiaHTML(list, campoFecha, function(p){ return pedidoItemHTML(p,'imprimirClick'); });
+            return;
+        }
+
+        // tab "cola": limpiar selecciones de pedidos que ya no están en la lista
+        Object.keys(seleccionadosImprimir).forEach(function(id){
+            if (!list.some(function(p){ return p.id===id; })) delete seleccionadosImprimir[id];
+        });
+        if (btn) btn.disabled = !list.length;
+        var chkTodos = document.getElementById('chk-seleccionar-todos');
+        if (chkTodos) chkTodos.checked = list.length>0 && list.every(function(p){ return !!seleccionadosImprimir[p.id]; });
+        if(!list.length){ el.innerHTML=emptyState('No hay pedidos para imprimir'); return; }
+        el.innerHTML=agruparPorDiaHTML(list, campoFecha, function(p){ return pedidoItemCheckboxHTML(p); });
+    });
+}
+
+function pedidoItemCheckboxHTML(p) {
+    var checked = seleccionadosImprimir[p.id] ? 'checked' : '';
+    // pedidoItemHTML ya trae su propio margin (8px 12px); acá el wrapper no le suma margen extra
+    var base = pedidoItemHTML(p,'imprimirClick');
+    return '<div style="display:flex;align-items:flex-start;gap:6px;">'+
+        '<input type="checkbox" '+checked+' onclick="event.stopPropagation(); toggleSeleccionItem(\''+p.id+'\')" style="margin:16px 0 0 12px;width:20px;height:20px;flex-shrink:0;">'+
+        '<div style="flex:1;">'+base+'</div>'+
+    '</div>';
+}
+
+function toggleSeleccionItem(id) {
+    if (seleccionadosImprimir[id]) delete seleccionadosImprimir[id];
+    else seleccionadosImprimir[id] = true;
+    var chkTodos = document.getElementById('chk-seleccionar-todos');
+    if (chkTodos) chkTodos.checked = imprimirListCache.length>0 && imprimirListCache.every(function(p){ return !!seleccionadosImprimir[p.id]; });
+}
+
+function toggleSeleccionarTodos() {
+    var marcarTodos = document.getElementById('chk-seleccionar-todos').checked;
+    imprimirListCache.forEach(function(p){
+        if (marcarTodos) seleccionadosImprimir[p.id] = true;
+        else delete seleccionadosImprimir[p.id];
+    });
+    loadImprimirPedidos();
+}
+
+async function imprimirClick(id) {
+    var p = await st.get(id);
+    currentPedido = p;
+    origenEtiqueta = 'imprimir';
+    await renderEtiqueta(currentPedido);
+    showScreen('etiqueta');
+}
+
+async function confirmarParaImprimir(id) {
+    await st.update(id, { paraImprimir: true, impreso: false });
+    currentPedido.paraImprimir = true;
+    currentPedido.impreso = false;
+    alert('✅ Pedido agregado a "Pedidos para Imprimir".');
+    renderEtiqueta(currentPedido);
+}
+
+async function quitarParaImprimir(id) {
+    await st.update(id, { paraImprimir: false });
+    currentPedido.paraImprimir = false;
+    renderEtiqueta(currentPedido);
+}
+
+async function descargarPdfSeleccionados() {
+    var idsSeleccionados = Object.keys(seleccionadosImprimir);
+    var list = (imprimirListCache||[]).filter(function(p){ return seleccionadosImprimir[p.id]; });
+    if (!list.length) return alert('Seleccioná al menos un pedido para descargar');
+    var jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDFCtor) return alert('No se pudo cargar el generador de PDF. Revisá tu conexión a internet.');
+
+    var doc = new jsPDFCtor({ unit: 'pt', format: 'a4' });
+    for (var i = 0; i < list.length; i++) {
+        if (i > 0) doc.addPage();
+        await agregarPedidoAlPDF(doc, list[i]);
+    }
+    doc.save('pedidos_para_imprimir_' + Date.now() + '.pdf');
+
+    for (var j = 0; j < list.length; j++) {
+        await st.update(list[j].id, { impreso: true, fechaImpreso: new Date().toLocaleString('es-AR') });
+    }
+    seleccionadosImprimir = {};
+    alert('✅ '+list.length+' pedido(s) descargado(s) y movido(s) a "Impresos".');
+}
+
+async function descargarPdfIndividual(id) {
+    var p = currentPedido && currentPedido.id === id ? currentPedido : await st.get(id);
+    if (!p) return alert('No se encontró el pedido');
+    var jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDFCtor) return alert('No se pudo cargar el generador de PDF. Revisá tu conexión a internet.');
+
+    var doc = new jsPDFCtor({ unit: 'pt', format: 'a4' });
+    await agregarPedidoAlPDF(doc, p);
+    var nombreArchivo = 'etiqueta_' + (p.cliente && p.cliente.nombre ? p.cliente.nombre.replace(/[^a-z0-9]+/gi,'_') : p.id) + '.pdf';
+    doc.save(nombreArchivo);
+}
+
+async function agregarPedidoAlPDF(doc, p) {
+    var lines = buildLabelLines(p);
+    var x = 55, y = 60, lh = 20;
+
+    lines.forEach(function(l) {
+        if (l.divider) { y += 6; doc.setDrawColor(0); doc.setLineWidth(1); doc.line(x, y, x + 480, y); y += 16; return; }
+        if (l.space) { y += 12; return; }
+        doc.setFont(undefined, l.bold ? 'bold' : 'normal');
+        doc.setFontSize(l.bold ? 13 : 11);
+        var texto = String(l.text || '');
+        var partido = doc.splitTextToSize(texto, 480);
+        partido.forEach(function(linea){ doc.text(linea, x, y); y += lh; });
+    });
+
+    try {
+        var qrImg = qrDataURL(QR_PREFIX + p.id, 6);
+        y += 10;
+        doc.addImage(qrImg, 'PNG', x, y, 110, 110);
+    } catch (e) { console.warn('No se pudo generar el QR para el PDF:', e); }
+}
+
+// ================================================================
+//  ETIQUETA
+// ================================================================
+// Convierte "2/7/2026" en "2/7" (sin año), para la línea del vendedor en la etiqueta
+function fechaCorta(fechaStr) {
+    if (!fechaStr) return '';
+    var partes = String(fechaStr).split('/');
+    return partes.length >= 2 ? (partes[0] + '/' + partes[1]) : fechaStr;
+}
+
+var DIVIDER_LINE = '—' + '-'.repeat(38);
+
+function buildLabelLines(p) {
+    var c   = p.cliente||{};
+    var pg  = p.pago   ||{};
+    var lines = [];
+
+    if (p.modificado) {
+        lines.push({text:'⚠️  PEDIDO YA ARMADO — TIRAR ETIQUETA ANTERIOR  ⚠️', bold:true, alerta:true});
+        lines.push({space:true});
+    }
+
+    lines.push({text: (p.numero?p.numero+') ':'') + (p.envio||p.tipoEnvio||''), bold:true});
+    lines.push({text: (p.vendedor||'') + ' PM ' + fechaCorta(p.fechaStr), bold:true});
+
+    lines.push({text: c.nombre||'',  bold:true});
+    if (c.tel)   lines.push({text: c.tel, bold:true});
+    if (c.dni)   lines.push({text:'DNI: '+c.dni, bold:true});
+    if (c.cp)    lines.push({text:'CP: '+c.cp, bold:true});
+    if (c.dir)   lines.push({text: c.dir, bold:true});
+    if (c.loc)   lines.push({text: c.loc, bold:true});
+    if (c.entre) lines.push({text: c.entre, bold:true});
+    if (c.notas) lines.push({text: c.notas, bold:true});
+
+    lines.push({text: DIVIDER_LINE, bold:true});
+    if (p.detalle) {
+        p.detalle.split('\n').forEach(function(l){ if(l.trim()) lines.push({text:l.trim(), bold:true}); });
+    }
+
+    if (p.cambioDevuelve) {
+        lines.push({space:true});
+        lines.push({text:'CAMBIO DEVUELVE:', bold:true});
+        p.cambioDevuelve.split('\n').forEach(function(l){ if(l.trim()) lines.push({text:l.trim(), bold:true}); });
+    }
+
+    lines.push({text: DIVIDER_LINE, bold:true});
+
+    if (pg.resta   && Number(pg.resta)>0)   lines.push({text:'RESTA ABONAR: $'+Number(pg.resta).toLocaleString('es-AR'), bold:true});
+    if (pg.sena    && Number(pg.sena)>0)    lines.push({text:'Seña: $'+Number(pg.sena).toLocaleString('es-AR'), bold:true});
+    if (pg.abonado && Number(pg.abonado)>0) lines.push({text:'Abonado: $'+Number(pg.abonado).toLocaleString('es-AR'), bold:true});
+    if (pg.cuenta)                           lines.push({text:'Cuenta: '+pg.cuenta, bold:true});
+
+    return lines;
+}
+
+async function renderEtiqueta(p) {
+    var lines = buildLabelLines(p);
+
+    var qrDataUrl = '';
+    try { qrDataUrl = qrDataURL(QR_PREFIX + p.id, 5); }
+    catch(e) { console.warn('No se pudo generar el QR:', e); }
+
+    var previewHtml = lines.map(function(l){
+        if(l.divider) return '<div class="lb-divider"></div>';
+        if(l.space) return '<div class="lb-space"></div>';
+        if(l.alerta) return '<div class="lb-alerta">'+l.text+'</div>';
+        return l.bold ? '<div class="lb-bold">'+l.text+'</div>' : '<div>'+l.text+'</div>';
+    }).join('');
+    var qrPreviewHtml = qrDataUrl ? '<div class="lb-qr"><img src="'+qrDataUrl+'" alt="QR pedido"></div>' : '';
+
+    var bannerMod = p.modificado
+        ? '<div class="banner-mod" style="margin:12px;">⚠️ PEDIDO YA ARMADO — TIRAR ETIQUETA ANTERIOR<br>'+
+          '<small style="font-weight:normal;font-size:13px;">'+(p.notaModificacion||'')+'</small></div>'
+        : '';
+
+    // Botón "Imprimir" (window.print directo): solo tiene sentido fuera de Depósito
+    // (en Depósito la única vía es "Confirmar para Imprimir"); ídem el botón del header.
+    var mostrarImprimirDirecto = origenEtiqueta !== 'deposito';
+    var btnVolver = document.getElementById('btn-volver-etiqueta');
+    if (btnVolver) btnVolver.setAttribute('onclick', "showScreen('" + (origenEtiqueta==='imprimir'?'imprimir':'deposito') + "')");
+    var btnImprimirHeader = document.getElementById('btn-imprimir-header');
+    if (btnImprimirHeader) btnImprimirHeader.style.display = mostrarImprimirDirecto ? 'inline-block' : 'none';
+
+    var mostrarRebote = origenEtiqueta === 'deposito' && p.estado !== 'ENTREGADO';
+
+    document.getElementById('etiqueta-content').innerHTML =
+        bannerMod+
+        '<div class="label-box">'+previewHtml+qrPreviewHtml+'</div>'+
+        '<div style="padding:4px 12px 16px;">'+
+            (mostrarImprimirDirecto ? '<button class="btn btn-print" onclick="imprimirEtiqueta()">🖨️ Imprimir</button>' : '')+
+            '<button class="btn" style="background:#5B2C87;color:white;" onclick="descargarPdfIndividual(\''+p.id+'\')">⬇️ Descargar PDF</button>'+
+            (p.modificado ?
+                '<div class="form-group" style="margin:10px 0;">'+
+                    '<label>Etiqueta anterior</label>'+
+                    '<select id="select-etiqueta-anterior" onchange="cambiarEstadoEtiquetaAnterior(this.value, \''+p.id+'\')">'+
+                        '<option value="tirar" selected>Tirar etiqueta anterior</option>'+
+                        '<option value="tirada">Ya tiré etiqueta anterior</option>'+
+                    '</select>'+
+                '</div>'
+            : '')+
+            '<button class="btn btn-success" onclick="marcarArmadoDep(\''+p.id+'\')">📦 Marcar como ARMADO</button>'+
+            (p.paraImprimir
+                ? '<button class="btn" style="background:#888;color:white;" onclick="quitarParaImprimir(\''+p.id+'\')">🗑️ Quitar de Pedidos para Imprimir</button>'
+                : '<button class="btn" style="background:#8E44AD;color:white;" onclick="confirmarParaImprimir(\''+p.id+'\')">✅ Confirmar para Imprimir</button>')+
+            (mostrarRebote ? '<button class="btn btn-danger" onclick="mostrarFormRebote(\''+p.id+'\')">🚫 Rebotar por falta de stock</button>' : '')+
+            '<button class="btn" style="background:#E74C3C;color:white;" onclick="eliminarPedidoEtiqueta(\''+p.id+'\')">🗑️ Eliminar pedido</button>'+
+        '</div>'+
+        '<div id="rebote-form-area"></div>';
+
+    var printHtml = lines.map(function(l){
+        if(l.divider) return '<span class="print-divider"></span>';
+        if(l.space)  return '<span class="print-space"></span>';
+        if(l.alerta) return '<span class="print-alerta">'+l.text+'</span>';
+        return l.bold ? '<span class="print-bold">'+l.text+'</span>' : '<span class="print-line">'+l.text+'</span>';
+    }).join('');
+    var qrPrintHtml = qrDataUrl ? '<span class="print-qr"><img src="'+qrDataUrl+'" alt="QR pedido"></span>' : '';
+    document.getElementById('print-area').innerHTML='<div class="print-label">'+printHtml+qrPrintHtml+'</div>';
+}
+
+function imprimirEtiqueta() {
+    document.getElementById('print-area').style.display='block';
+    window.print();
+    setTimeout(function(){ document.getElementById('print-area').style.display='none'; }, 1500);
+}
+
+async function confirmarEtiquetaVista(id) {
+    await st.update(id, { modificado:false, notaModificacion:'' });
+    currentPedido.modificado=false; currentPedido.notaModificacion='';
+    renderEtiqueta(currentPedido);
+    alert('✅ Listo.');
+}
+
+function cambiarEstadoEtiquetaAnterior(valor, id) {
+    if (valor === 'tirada') {
+        confirmarEtiquetaVista(id);
+    }
+    // valor === 'tirar' no hace nada: sigue pendiente de tirar la etiqueta anterior.
+}
+
+async function eliminarPedidoEtiqueta(id) {
+    if (!confirm('¿Seguro que querés eliminar este pedido? Esta acción no se puede deshacer.')) return;
+    await st.remove(id);
+    showScreen(origenEtiqueta === 'imprimir' ? 'imprimir' : 'deposito');
+}
+
+// ================================================================
+//  REBOTAR PEDIDO POR FALTA DE STOCK (desde Depósito)
+// ================================================================
+function mostrarFormRebote(id) {
+    var p = currentPedido;
+    var lineas = (p.detalle||'').split('\n').map(function(l){ return l.trim(); }).filter(function(l){ return l; });
+    var opciones = lineas.map(function(l){
+        var esc = l.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        return '<option value="'+esc+'">'+esc+'</option>';
+    }).join('');
+    document.getElementById('rebote-form-area').innerHTML =
+        '<div class="card">'+
+            '<h3 style="color:#E74C3C;">🚫 Rebotar por falta de stock</h3>'+
+            '<div class="form-group">'+
+                '<label>¿Qué producto falta? <span class="obl">*</span></label>'+
+                '<select id="rebote-producto">'+
+                    '<option value="">-- Seleccioná --</option>'+
+                    opciones+
+                    '<option value="Otro">Otro (especificar en la nota)</option>'+
+                '</select>'+
+            '</div>'+
+            '<div class="form-group">'+
+                '<label>Nota para el vendedor <span class="obl">*</span></label>'+
+                '<textarea id="rebote-nota" placeholder="Ej: No queda stock de este producto, avisar al cliente"></textarea>'+
+            '</div>'+
+            '<button class="btn btn-danger" onclick="confirmarRebote(\''+id+'\')">🚫 Confirmar rebote</button>'+
+            '<button class="btn" style="background:#888;color:white;" onclick="document.getElementById(\'rebote-form-area\').innerHTML=\'\'">Cancelar</button>'+
+        '</div>';
+}
+
+async function confirmarRebote(id) {
+    var producto = document.getElementById('rebote-producto').value;
+    var nota = document.getElementById('rebote-nota').value.trim();
+    if (!producto) return alert('Seleccioná qué producto falta');
+    if (!nota) return alert('Dejá una nota para el vendedor');
+    if (!confirm('¿Confirmás que rebotás este pedido al vendedor por falta de stock?')) return;
+
+    await st.update(id, {
+        estado: 'RECHAZADO',
+        modificado: false,
+        rebotadoPorDeposito: true,
+        productoFaltante: producto,
+        notaRecotiz: nota
+    });
+    alert('🚫 Pedido rebotado al vendedor por falta de stock.');
+    showScreen('deposito');
+}
+
+async function marcarArmadoDep(id) {
+    await st.update(id, { estado:'ARMADO', modificado:false });
+    alert('📦 Marcado como ARMADO');
+    showScreen('deposito');
+}
+
+// ================================================================
+//  ARMADO — ESCANEO DE EMPLEADOS
+// ================================================================
+function salirArmado() {
+    detenerScanner();
+    currentEmpleado = null;
+    showScreen('armado-login');
+}
+
+function prepararScreenArmado() {
+    document.getElementById('armado-scan-title').textContent = '🔧 ' + currentEmpleado;
+    document.getElementById('armado-resultado').innerHTML = '';
+    document.getElementById('qr-reader').innerHTML = '';
+    document.getElementById('btn-iniciar-scan').style.display = 'block';
+    document.getElementById('btn-detener-scan').style.display = 'none';
+}
+
+function iniciarScanner() {
+    if (typeof Html5Qrcode === 'undefined') {
+        alert('No se pudo cargar el lector de QR. Revisá tu conexión a internet.');
+        return;
+    }
+    var readerEl = document.getElementById('qr-reader');
+    readerEl.innerHTML = '';
+    document.getElementById('armado-resultado').innerHTML = '';
+    document.getElementById('btn-iniciar-scan').style.display = 'none';
+    document.getElementById('btn-detener-scan').style.display = 'block';
+
+    html5QrScanner = new Html5Qrcode('qr-reader');
+    html5QrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: 240 },
+        onScanExitoso,
+        function(errorMsg) { /* se ignoran frames sin QR detectado */ }
+    ).catch(function(err) {
+        alert('No se pudo acceder a la cámara: ' + err);
+        document.getElementById('btn-iniciar-scan').style.display = 'block';
+        document.getElementById('btn-detener-scan').style.display = 'none';
+    });
+}
+
+function detenerScanner() {
+    if (html5QrScanner) {
+        var s = html5QrScanner;
+        html5QrScanner = null;
+        s.stop().then(function(){ s.clear(); }).catch(function(){});
+    }
+    var btnIni = document.getElementById('btn-iniciar-scan');
+    var btnDet = document.getElementById('btn-detener-scan');
+    if (btnIni) btnIni.style.display = 'block';
+    if (btnDet) btnDet.style.display = 'none';
+}
+
+async function onScanExitoso(decodedText) {
+    detenerScanner();
+    var id = idDesdeQR(decodedText);
+    var resEl = document.getElementById('armado-resultado');
+    var p = await st.get(id);
+
+    if (!p) {
+        resEl.innerHTML = '<div class="card"><p style="color:#E74C3C;font-weight:bold;">❌ No se encontró ningún pedido con ese código.</p>'+
+            '<p style="font-size:12px;color:#888;">Puede ser una etiqueta vieja, de antes de conectar la base de datos actual. Probá con un pedido creado ahora.</p>'+
+            '<button class="btn btn-success" onclick="iniciarScanner()">📷 Escanear de nuevo</button></div>';
+        return;
+    }
+    if (p.estado === 'ARMADO' || p.estado === 'ENTREGADO') {
+        resEl.innerHTML = '<div class="card"><p style="color:#E74C3C;font-weight:bold;">⚠️ Este pedido ya fue armado'+(p.armadoPor?' por '+p.armadoPor:'')+'.</p>'+
+            '<button class="btn btn-success" onclick="iniciarScanner()">📷 Escanear otro</button></div>';
+        return;
+    }
+    if (p.estado !== 'APROBADO') {
+        resEl.innerHTML = '<div class="card"><p style="color:#E74C3C;font-weight:bold;">⚠️ Este pedido todavía no está APROBADO por Mateo.</p>'+
+            '<button class="btn btn-success" onclick="iniciarScanner()">📷 Escanear otro</button></div>';
+        return;
+    }
+
+    resEl.innerHTML =
+        '<div class="card">'+
+            '<h3>Confirmar armado</h3>'+
+            row('Cliente', p.cliente && p.cliente.nombre)+
+            row('Vendedor', p.vendedor)+
+            row('Envío', p.envio||p.tipoEnvio||'')+
+            '<p style="font-size:14px;margin-top:8px;white-space:pre-wrap;">'+(p.detalle||'')+'</p>'+
+            '<button class="btn btn-success" onclick="confirmarArmadoScan(\''+p.id+'\')">✅ Confirmar Armado</button>'+
+            '<button class="btn" style="background:#888;color:white;" onclick="iniciarScanner()">📷 Escanear otro</button>'+
+        '</div>';
+}
+
+async function confirmarArmadoScan(id) {
+    await st.update(id, {
+        estado: 'ARMADO', modificado: false,
+        armadoPor: currentEmpleado,
+        fechaArmado: new Date().toLocaleString('es-AR')
+    });
+    document.getElementById('armado-resultado').innerHTML =
+        '<div class="card"><p style="color:#27AE60;font-weight:bold;">✅ Pedido marcado como ARMADO por '+currentEmpleado+'.</p>'+
+        '<button class="btn btn-success" onclick="iniciarScanner()">📷 Escanear otro</button></div>';
+}
+
+// ================================================================
+//  LOGÍSTICA — REPARTIDORES
+// ================================================================
+function seleccionarRepartidor(nombre) {
+    currentRepartidor = nombre;
+    prepararScreenLogistica();
+    showScreen('logistica-scan');
+    loadLogisticaLista();
+}
+
+function salirLogistica() {
+    detenerScannerLog();
+    if (unsub.log) { unsub.log(); unsub.log=null; }
+    currentRepartidor = null;
+    showScreen('logistica-login');
+}
+
+function prepararScreenLogistica() {
+    document.getElementById('logistica-scan-title').textContent = '🚚 ' + currentRepartidor;
+    document.getElementById('logistica-resultado').innerHTML = '';
+    document.getElementById('qr-reader-log').innerHTML = '';
+    document.getElementById('btn-iniciar-scan-log').style.display = 'block';
+    document.getElementById('btn-detener-scan-log').style.display = 'none';
+}
+
+function iniciarScannerLog() {
+    if (typeof Html5Qrcode === 'undefined') {
+        alert('No se pudo cargar el lector de QR. Revisá tu conexión a internet.');
+        return;
+    }
+    var readerEl = document.getElementById('qr-reader-log');
+    readerEl.innerHTML = '';
+    document.getElementById('logistica-resultado').innerHTML = '';
+    document.getElementById('btn-iniciar-scan-log').style.display = 'none';
+    document.getElementById('btn-detener-scan-log').style.display = 'block';
+
+    html5QrScannerLog = new Html5Qrcode('qr-reader-log');
+    html5QrScannerLog.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: 240 },
+        onScanExitosoLog,
+        function(errorMsg) { /* se ignoran frames sin QR detectado */ }
+    ).catch(function(err) {
+        alert('No se pudo acceder a la cámara: ' + err);
+        document.getElementById('btn-iniciar-scan-log').style.display = 'block';
+        document.getElementById('btn-detener-scan-log').style.display = 'none';
+    });
+}
+
+function detenerScannerLog() {
+    if (html5QrScannerLog) {
+        var s = html5QrScannerLog;
+        html5QrScannerLog = null;
+        s.stop().then(function(){ s.clear(); }).catch(function(){});
+    }
+    var btnIni = document.getElementById('btn-iniciar-scan-log');
+    var btnDet = document.getElementById('btn-detener-scan-log');
+    if (btnIni) btnIni.style.display = 'block';
+    if (btnDet) btnDet.style.display = 'none';
+}
+
+// Extrae el id de pedido a partir del texto leído por la cámara, tolerando
+// espacios/mayúsculas de más (por si el QR se escaneó con otra app o quedó
+// con espacios en blanco alrededor).
+function idDesdeQR(decodedText) {
+    var texto = String(decodedText||'').trim();
+    var prefUpper = QR_PREFIX.toUpperCase();
+    if (texto.toUpperCase().indexOf(prefUpper) === 0) {
+        return texto.slice(QR_PREFIX.length).trim();
+    }
+    return texto;
+}
+
+async function onScanExitosoLog(decodedText) {
+    detenerScannerLog();
+    var id = idDesdeQR(decodedText);
+    var resEl = document.getElementById('logistica-resultado');
+    var p = await st.get(id);
+
+    if (!p) {
+        resEl.innerHTML = '<div class="card"><p style="color:#E74C3C;font-weight:bold;">❌ No se encontró ningún pedido con ese código.</p>'+
+            '<p style="font-size:12px;color:#888;">Puede ser una etiqueta vieja, de antes de conectar la base de datos actual. Probá con un pedido creado ahora.</p>'+
+            '<button class="btn btn-success" onclick="iniciarScannerLog()">📷 Escanear de nuevo</button></div>';
+        return;
+    }
+
+    var c = p.cliente || {};
+    resEl.innerHTML =
+        '<div class="card">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+                '<h3 style="margin:0;">'+(p.numero?'#'+p.numero+' · ':'')+(c.nombre||'-')+'</h3>'+
+                '<span class="badge badge-'+(p.estado||'').toLowerCase()+'">'+p.estado+'</span>'+
+            '</div>'+
+            row('Vendedor', p.vendedor)+
+            row('Envío', p.envio||p.tipoEnvio||'')+
+            row('Teléfono', c.tel)+
+            (c.dir  ? row('Dirección', c.dir) : '')+
+            (c.loc  ? row('Localidad', c.loc) : '')+
+            (c.entre? row('Entre calles', c.entre) : '')+
+            (p.repartidor ? row('Ya asignado a', p.repartidor) : '')+
+            '<p style="font-size:14px;margin-top:10px;white-space:pre-wrap;">'+(p.detalle||'')+'</p>'+
+            (p.cambioDevuelve ? '<div class="alerta-item">🔄 Cambio devuelve: '+p.cambioDevuelve+'</div>' : '')+
+            '<button class="btn btn-primary" style="margin-top:14px;" onclick="verDetalleDesdeScan(\''+p.id+'\')">📄 Ver detalle completo</button>'+
+            '<button class="btn btn-success" onclick="asignarRepartidor(\''+p.id+'\')">✅ Agregar a mi lista de reparto</button>'+
+            '<button class="btn" style="background:#888;color:white;" onclick="iniciarScannerLog()">📷 Escanear otro</button>'+
+        '</div>';
+}
+
+async function verDetalleDesdeScan(id) {
+    var p = await st.get(id);
+    currentPedido = p;
+    renderDetalleLogistica(p);
+    showScreen('detalle-logistica');
+}
+
+async function asignarRepartidor(id) {
+    await st.update(id, {
+        repartidor: currentRepartidor,
+        fechaAsignado: new Date().toLocaleString('es-AR')
+    });
+    document.getElementById('logistica-resultado').innerHTML =
+        '<div class="card"><p style="color:#27AE60;font-weight:bold;">✅ Pedido agregado a la lista de '+currentRepartidor+'.</p>'+
+        '<button class="btn btn-success" onclick="iniciarScannerLog()">📷 Escanear otro</button></div>';
+    loadLogisticaLista();
+}
+
+function loadLogisticaLista() {
+    if (unsub.log) { unsub.log(); unsub.log=null; }
+    unsub.log = st.subscribe(function(p){ return p.repartidor === currentRepartidor; }, function(list){
+        list.sort(function(a,b){ return timestampDesdeString(b.fechaAsignado) - timestampDesdeString(a.fechaAsignado); });
+        actualizarSelectFechas('filtro-fecha-logistica', list, 'fechaAsignado', 'logistica');
+        list = aplicarFiltroFecha(list, 'fechaAsignado', 'logistica');
+        var el = document.getElementById('logistica-lista');
+        if (!el) return;
+        if(!list.length){ el.innerHTML=emptyState('Todavía no escaneaste ningún pedido'); return; }
+        el.innerHTML=agruparPorDiaHTML(list, 'fechaAsignado', function(p){ return pedidoItemHTML(p,'logisticaDetalleClick'); });
+    });
+}
+
+async function logisticaDetalleClick(id) {
+    var p = await st.get(id);
+    currentPedido = p;
+    renderDetalleLogistica(p);
+    showScreen('detalle-logistica');
+}
+
+function renderDetalleLogistica(p) {
+    var c  = p.cliente||{};
+    var pg = p.pago   ||{};
+    document.getElementById('detalle-logistica-content').innerHTML =
+        '<div class="card">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+                '<h2 style="font-size:18px;">'+(p.numero?'#'+p.numero+' · ':'')+(c.nombre||'-')+'</h2>'+
+                '<span class="badge badge-'+(p.estado||'').toLowerCase()+'">'+p.estado+'</span>'+
+            '</div>'+
+            row('N° de pedido', p.numero?('#'+p.numero):'')+
+            row('Vendedor', p.vendedor)+
+            row('Envío', p.envio||p.tipoEnvio||'')+
+            row('Teléfono', c.tel)+
+            (c.dni   ? row('DNI',          c.dni)   : '')+
+            (c.cp    ? row('CP',           c.cp)    : '')+
+            (c.dir   ? row('Dirección',    c.dir)   : '')+
+            (c.loc   ? row('Localidad',    c.loc)   : '')+
+            (c.entre ? row('Entre calles', c.entre) : '')+
+            (c.notas ? row('Notas',        c.notas) : '')+
+            (p.repartidor ? row('Repartidor', p.repartidor) : '')+
+        '</div>'+
+        '<div class="card">'+
+            '<h3>📱 Detalle del pedido</h3>'+
+            '<p style="font-size:15px;line-height:1.7;white-space:pre-wrap;">'+(p.detalle||'-')+'</p>'+
+        '</div>'+
+        (p.cambioDevuelve ?
+        '<div class="card">'+
+            '<h3 style="color:#E74C3C;">🔄 Cambio devuelve</h3>'+
+            '<p style="font-size:15px;line-height:1.7;white-space:pre-wrap;">'+p.cambioDevuelve+'</p>'+
+        '</div>'
+        : '')+
+        (pg.sena||pg.resta||pg.abonado||pg.cuenta ?
+        '<div class="card">'+
+            '<h3>💰 Pago</h3>'+
+            '<div class="pagos-grid">'+
+                (pg.sena    ? '<div class="pago-box"><div class="p-label">Seña</div><div class="p-val">$'+Number(pg.sena).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.resta   ? '<div class="pago-box"><div class="p-label">Resta</div><div class="p-val" style="color:#E74C3C;">$'+Number(pg.resta).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.abonado ? '<div class="pago-box"><div class="p-label">Abonado</div><div class="p-val" style="color:#27AE60;">$'+Number(pg.abonado).toLocaleString('es-AR')+'</div></div>' : '')+
+                (pg.cuenta  ? '<div class="pago-box" style="grid-column:span 2;"><div class="p-label">Cuenta</div><div class="p-val" style="font-size:14px;">'+pg.cuenta+'</div></div>' : '')+
+            '</div>'+
+        '</div>'
+        : '')+
+        (p.pagoEntrega ? '<div class="card"><h3>🏢 Pago en entrega</h3><p style="font-size:16px;font-weight:700;color:#27AE60;">'+p.pagoEntrega+'</p></div>' : '')+
+        (p.repartidor === currentRepartidor ?
+        '<div class="card">'+
+            '<button class="btn" style="background:#E67E22;color:white;" onclick="quitarDeListaLogistica(\''+p.id+'\')">🗑️ Quitar de mi lista</button>'+
+        '</div>'
+        : '');
+}
+
+async function quitarDeListaLogistica(id) {
+    if (!confirm('¿Quitar este pedido de tu lista de reparto? El pedido no se elimina, solo deja de estar asignado a vos.')) return;
+    await st.update(id, { repartidor: '', fechaAsignado: '' });
+    showScreen('logistica-scan');
+    loadLogisticaLista();
+}
+
+// ================================================================
+//  PEDIDOS OFICINA — ESCANEO Y ENTREGA
+// ================================================================
+function prepararScreenOficina() {
+    document.getElementById('oficina-resultado').innerHTML = '';
+    document.getElementById('qr-reader-oficina').innerHTML = '';
+    document.getElementById('btn-iniciar-scan-oficina').style.display = 'block';
+    document.getElementById('btn-detener-scan-oficina').style.display = 'none';
+}
+
+function iniciarScannerOficina() {
+    if (typeof Html5Qrcode === 'undefined') {
+        alert('No se pudo cargar el lector de QR. Revisá tu conexión a internet.');
+        return;
+    }
+    var readerEl = document.getElementById('qr-reader-oficina');
+    readerEl.innerHTML = '';
+    document.getElementById('oficina-resultado').innerHTML = '';
+    document.getElementById('btn-iniciar-scan-oficina').style.display = 'none';
+    document.getElementById('btn-detener-scan-oficina').style.display = 'block';
+
+    html5QrScannerOficina = new Html5Qrcode('qr-reader-oficina');
+    html5QrScannerOficina.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: 240 },
+        onScanExitosoOficina,
+        function(errorMsg) { /* se ignoran frames sin QR detectado */ }
+    ).catch(function(err) {
+        alert('No se pudo acceder a la cámara: ' + err);
+        document.getElementById('btn-iniciar-scan-oficina').style.display = 'block';
+        document.getElementById('btn-detener-scan-oficina').style.display = 'none';
+    });
+}
+
+function detenerScannerOficina() {
+    if (html5QrScannerOficina) {
+        var s = html5QrScannerOficina;
+        html5QrScannerOficina = null;
+        s.stop().then(function(){ s.clear(); }).catch(function(){});
+    }
+    var btnIni = document.getElementById('btn-iniciar-scan-oficina');
+    var btnDet = document.getElementById('btn-detener-scan-oficina');
+    if (btnIni) btnIni.style.display = 'block';
+    if (btnDet) btnDet.style.display = 'none';
+}
+
+async function onScanExitosoOficina(decodedText) {
+    detenerScannerOficina();
+    var id = idDesdeQR(decodedText);
+    var resEl = document.getElementById('oficina-resultado');
+    var p = await st.get(id);
+
+    if (!p) {
+        resEl.innerHTML = '<div class="card"><p style="color:#E74C3C;font-weight:bold;">❌ No se encontró ningún pedido con ese código.</p>'+
+            '<p style="font-size:12px;color:#888;">Puede ser una etiqueta vieja, de antes de conectar la base de datos actual. Probá con un pedido creado ahora.</p>'+
+            '<button class="btn btn-success" onclick="iniciarScannerOficina()">📷 Escanear de nuevo</button></div>';
+        return;
+    }
+
+    var c = p.cliente || {};
+    resEl.innerHTML =
+        '<div class="card">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+                '<h3 style="margin:0;">'+(p.numero?'#'+p.numero+' · ':'')+(c.nombre||'-')+'</h3>'+
+                '<span class="badge badge-'+(p.estado||'').toLowerCase()+'">'+p.estado+'</span>'+
+            '</div>'+
+            row('Vendedor', p.vendedor)+
+            row('Envío', p.envio||p.tipoEnvio||'')+
+            row('Teléfono', c.tel)+
+            (pg_resta(p) ? row('Resta abonar', '$'+Number(pg_resta(p)).toLocaleString('es-AR')) : '')+
+            '<p style="font-size:14px;margin-top:10px;white-space:pre-wrap;">'+(p.detalle||'')+'</p>'+
+            '<div class="form-group" style="margin-top:14px;">'+
+                '<label>Forma de pago</label>'+
+                '<select id="oficina-forma-pago" onchange="toggleCuentaOficina()">'+
+                    '<option value="">-- Seleccioná --</option>'+
+                    '<option value="Transferencia">Transferencia</option>'+
+                    '<option value="Transferencia dólares">Transferencia dólares</option>'+
+                    '<option value="Efectivo pesos">Efectivo pesos</option>'+
+                    '<option value="Efectivo dólares">Efectivo dólares</option>'+
+                '</select>'+
+            '</div>'+
+            '<div class="form-group"><label>Monto</label><input type="number" id="oficina-monto" placeholder="0" inputmode="numeric"></div>'+
+            '<div class="form-group" id="grp-oficina-cuenta" style="display:none;">'+
+                '<label>Cuenta donde transfirió</label>'+
+                '<select id="oficina-cuenta">'+cuentaSelectOptionsHTML()+'</select>'+
+            '</div>'+
+            '<button class="btn btn-success" onclick="confirmarEntregaOficina(\''+p.id+'\')">✅ Marcar como ENTREGADO</button>'+
+            '<button class="btn" style="background:#888;color:white;" onclick="iniciarScannerOficina()">📷 Escanear otro</button>'+
+            '<button class="btn" style="background:#E74C3C;color:white;" onclick="eliminarPedidoOficina(\''+p.id+'\')">🗑️ Eliminar pedido</button>'+
+        '</div>';
+}
+
+async function eliminarPedidoOficina(id) {
+    if (!confirm('¿Seguro que querés eliminar este pedido? Esta acción no se puede deshacer.')) return;
+    await st.remove(id);
+    document.getElementById('oficina-resultado').innerHTML =
+        '<div class="card"><p style="color:#27AE60;font-weight:bold;">✅ Pedido eliminado.</p>'+
+        '<button class="btn btn-success" onclick="iniciarScannerOficina()">📷 Escanear otro</button></div>';
+}
+
+function pg_resta(p) { return p && p.pago && p.pago.resta ? p.pago.resta : 0; }
+
+function toggleCuentaOficina() {
+    var forma = document.getElementById('oficina-forma-pago').value;
+    var esTransferencia = forma.indexOf('Transferencia') === 0;
+    document.getElementById('grp-oficina-cuenta').style.display = esTransferencia ? 'block' : 'none';
+}
+
+async function confirmarEntregaOficina(id) {
+    var forma  = document.getElementById('oficina-forma-pago').value;
+    var monto  = document.getElementById('oficina-monto').value;
+    var cuenta = (document.getElementById('oficina-cuenta')||{}).value || '';
+    if (!forma) return alert('Seleccioná la forma de pago');
+    if (forma.indexOf('Transferencia') === 0 && !cuenta) return alert('Seleccioná a qué cuenta transfirió');
+
+    var montoNum = Number(monto) || 0;
+    var pagoEntrega = forma + (montoNum ? ': $'+montoNum.toLocaleString('es-AR') : '') + (cuenta ? ' — '+cuenta : '');
+
+    await st.update(id, {
+        estado: 'ENTREGADO',
+        pagoEntrega: pagoEntrega,
+        formaPagoEntrega: forma,
+        montoEntrega: montoNum,
+        cuentaEntrega: cuenta,
+        entregadoPor: 'OFICINA',
+        fechaEntregado: new Date().toLocaleString('es-AR')
+    });
+    document.getElementById('oficina-resultado').innerHTML =
+        '<div class="card"><p style="color:#27AE60;font-weight:bold;">✅ Pedido marcado como ENTREGADO.</p>'+
+        '<p style="margin-top:6px;">🏢 '+pagoEntrega+'</p>'+
+        '<button class="btn btn-success" onclick="iniciarScannerOficina()">📷 Escanear otro</button></div>';
+}
+</script>
+</body>
+</html>
