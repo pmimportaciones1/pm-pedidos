@@ -172,6 +172,15 @@
         .pedido-item { border-radius: 0 16px 16px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
         .fab { box-shadow: 0 6px 22px rgba(31,56,100,0.45); }
         .section-divider { border-radius: 8px; }
+
+        /* AUTOCOMPLETADO PRODUCTOS */
+        .autocomplete-box { position: absolute; left: 0; right: 0; top: 100%; background: white; border: 1.5px solid #e0e0e0; border-radius: 12px; margin-top: 4px; max-height: 240px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.14); z-index: 50; display: none; }
+        .autocomplete-box.open { display: block; }
+        .autocomplete-item { padding: 11px 14px; font-size: 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px solid #f2f2f2; }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover { background: #f0f2f5; }
+        .autocomplete-item .stock-badge { font-size: 11px; color: #888; white-space: nowrap; flex-shrink: 0; }
+        .autocomplete-item .stock-badge.sin-stock { color: #E74C3C; font-weight: 700; }
     </style>
 </head>
 <body>
@@ -246,7 +255,7 @@
     <div id="vend-list">
         <div class="empty-state"><div class="empty-icon">👆</div><p>Seleccioná tu nombre</p></div>
     </div>
-    <button class="fab" onclick="showScreen('nuevo-pedido')">+</button>
+    <button class="fab" onclick="abrirNuevoPedido()">+</button>
 </div>
 
 <!-- VENDEDOR - DETALLE / MODIFICAR -->
@@ -343,9 +352,10 @@
     <!-- DETALLE DEL PEDIDO -->
     <div class="card">
         <h3>📱 Detalle del pedido</h3>
-        <div class="form-group">
+        <div class="form-group" style="position:relative;">
             <label>Productos / descripción <span class="obl">*</span></label>
-            <textarea id="form-detalle" rows="4" placeholder="2x Redmi 14C 256/16GB&#10;1x Funda + vidrio"></textarea>
+            <textarea id="form-detalle" rows="4" placeholder="2x Redmi 14C 256/16GB&#10;1x Funda + vidrio" oninput="manejarAutocompleteDetalle(this)" onkeyup="manejarAutocompleteDetalle(this)" onblur="setTimeout(ocultarSugerencias, 150)"></textarea>
+            <div id="detalle-sugerencias" class="autocomplete-box"></div>
         </div>
         <div class="form-group">
             <label>Nota para Mateo (opcional)</label>
@@ -650,6 +660,130 @@ var st = {
         return function(){ clearInterval(iv); window.removeEventListener('pm_update',emit); };
     }
 };
+
+// ================================================================
+//  AUTOCOMPLETADO DE PRODUCTOS (desde planilla de Google Sheets de Stock)
+// ================================================================
+// La planilla tiene una hoja distinta por semana, nombrada "D/MM" (ej: "6/07"),
+// con el nombre del Lunes de esa semana. Calculamos ese nombre según la fecha de hoy.
+var STOCK_SHEET_ID = '1f3BM-aJmyK3-znibP2dUIXvixR0d5YoI204cMFcI0Ug';
+var productosCache = [];
+var productosCacheCargado = false;
+
+function nombreHojaStockActual() {
+    var hoy = new Date();
+    var diaSemana = hoy.getDay(); // 0=domingo,1=lunes,...
+    var offsetALunes = (diaSemana + 6) % 7; // días desde el lunes más reciente
+    var lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - offsetALunes);
+    var dia = lunes.getDate();
+    var mes = String(lunes.getMonth() + 1).padStart(2, '0');
+    return dia + '/' + mes;
+}
+
+// Parser de CSV simple (soporta campos entre comillas, comas y comillas escapadas)
+function parseCSV(texto) {
+    var filas = [], fila = [], campo = '', entreComillas = false;
+    for (var i = 0; i < texto.length; i++) {
+        var c = texto[i];
+        if (entreComillas) {
+            if (c === '"') {
+                if (texto[i + 1] === '"') { campo += '"'; i++; }
+                else { entreComillas = false; }
+            } else { campo += c; }
+        } else {
+            if (c === '"') entreComillas = true;
+            else if (c === ',') { fila.push(campo); campo = ''; }
+            else if (c === '\n') { fila.push(campo); filas.push(fila); fila = []; campo = ''; }
+            else if (c === '\r') { /* ignorar */ }
+            else { campo += c; }
+        }
+    }
+    if (campo.length || fila.length) { fila.push(campo); filas.push(fila); }
+    return filas;
+}
+
+async function cargarProductosDesdeSheet() {
+    if (productosCacheCargado) return;
+    try {
+        var hoja = nombreHojaStockActual();
+        var url = 'https://docs.google.com/spreadsheets/d/' + STOCK_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(hoja);
+        var res = await fetch(url);
+        if (!res.ok) throw new Error('No se pudo leer la planilla (¿existe la hoja "' + hoja + '"?)');
+        var texto = await res.text();
+        var filas = parseCSV(texto);
+        productosCache = filas.slice(1)
+            .filter(function(r) { return r[1] && r[1].trim(); })
+            .map(function(r) { return { nombre: r[1].trim(), stock: parseInt(r[14], 10) || 0 }; });
+        productosCacheCargado = true;
+    } catch (e) {
+        console.warn('Autocompletado de productos no disponible:', e.message);
+    }
+}
+
+function abrirNuevoPedido() {
+    showScreen('nuevo-pedido');
+    cargarProductosDesdeSheet();
+}
+
+// Estado de la sugerencia activa (qué línea del textarea se está completando)
+var sugerenciasActuales = [];
+var sugerenciaPrefijo = '';
+var sugerenciaInicioLinea = 0;
+var sugerenciaCursorPos = 0;
+
+function manejarAutocompleteDetalle(el) {
+    cargarProductosDesdeSheet();
+    var cursorPos = el.selectionStart;
+    var texto = el.value;
+    var inicioLinea = texto.lastIndexOf('\n', cursorPos - 1) + 1;
+    var linea = texto.substring(inicioLinea, cursorPos);
+
+    var m = linea.match(/^(\s*\d+\s*x\s*)(.*)$/i);
+    var prefijo = m ? m[1] : '';
+    var consulta = (m ? m[2] : linea).trim();
+
+    if (consulta.length < 2 || !productosCache.length) { ocultarSugerencias(); return; }
+
+    var q = consulta.toLowerCase();
+    var matches = productosCache.filter(function(p) { return p.nombre.toLowerCase().indexOf(q) >= 0; }).slice(0, 8);
+    if (!matches.length) { ocultarSugerencias(); return; }
+
+    sugerenciasActuales = matches;
+    sugerenciaPrefijo = prefijo;
+    sugerenciaInicioLinea = inicioLinea;
+    sugerenciaCursorPos = cursorPos;
+
+    var box = document.getElementById('detalle-sugerencias');
+    box.innerHTML = matches.map(function(p, i) {
+        var sinStock = p.stock <= 0;
+        return '<div class="autocomplete-item" onmousedown="event.preventDefault(); seleccionarSugerencia(' + i + ')">' +
+            '<span>' + p.nombre + '</span>' +
+            '<span class="stock-badge' + (sinStock ? ' sin-stock' : '') + '">' + (sinStock ? 'sin stock' : 'stock: ' + p.stock) + '</span>' +
+        '</div>';
+    }).join('');
+    box.classList.add('open');
+}
+
+function ocultarSugerencias() {
+    var box = document.getElementById('detalle-sugerencias');
+    if (box) { box.classList.remove('open'); box.innerHTML = ''; }
+}
+
+function seleccionarSugerencia(i) {
+    var p = sugerenciasActuales[i];
+    if (!p) return;
+    var el = document.getElementById('form-detalle');
+    var texto = el.value;
+    var antes = texto.substring(0, sugerenciaInicioLinea);
+    var despues = texto.substring(sugerenciaCursorPos);
+    var nuevaLinea = sugerenciaPrefijo + p.nombre;
+    el.value = antes + nuevaLinea + despues;
+    var nuevaPos = (antes + nuevaLinea).length;
+    el.focus();
+    el.setSelectionRange(nuevaPos, nuevaPos);
+    ocultarSugerencias();
+}
 
 // ================================================================
 //  CONSTANTES
