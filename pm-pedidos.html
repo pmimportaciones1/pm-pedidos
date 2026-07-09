@@ -24,6 +24,9 @@
         .header { background: #1F3864; color: white; padding: 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
         .header h1 { font-size: 18px; flex: 1; }
         .back-btn { background: none; border: none; color: white; font-size: 22px; cursor: pointer; padding: 4px 8px; }
+        .refresh-btn { background: none; border: none; color: white; font-size: 19px; cursor: pointer; padding: 4px 8px; }
+        .refresh-btn.spinning { animation: girar-refresh 0.5s linear; }
+        @keyframes girar-refresh { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         /* INICIO */
         #screen-inicio.active { background: #1F3864; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }
@@ -86,6 +89,7 @@
         .badge-rechazado  { background: #FEE2E2; color: #991B1B; }
         .badge-armado     { background: #DBEAFE; color: #1E40AF; }
         .badge-entregado  { background: #D1FAE5; color: #065F46; }
+        .badge-cancelado  { background: #F3F4F6; color: #4B5563; }
         .badge-modificado { background: #E74C3C; color: white; }
 
         /* PEDIDO ITEM */
@@ -95,6 +99,7 @@
         .pedido-item.rechazado  { border-left-color: #E74C3C; }
         .pedido-item.armado     { border-left-color: #3498DB; }
         .pedido-item.entregado  { border-left-color: #888; }
+        .pedido-item.cancelado  { border-left-color: #9CA3AF; opacity: 0.6; }
         .pedido-item.modificado-border { border-left-color: #E74C3C; animation: pulso 1s infinite; }
         @keyframes pulso { 0%,100%{border-left-width:5px} 50%{border-left-width:9px} }
         .pedido-item h3 { font-size: 16px; margin-bottom: 4px; }
@@ -234,6 +239,7 @@
     <div class="header">
         <button class="back-btn" onclick="goHome()">←</button>
         <h1>Mis Pedidos</h1>
+        <button class="refresh-btn" title="Actualizar" onclick="refrescarLista(loadVendedorPedidos, this)">🔄</button>
     </div>
     <div class="tabs">
         <div class="tab active" onclick="showVendTab('pendientes')">⏳ Pendientes</div>
@@ -397,6 +403,7 @@
     <div class="header">
         <button class="back-btn" onclick="goHome()">←</button>
         <h1>👑 Admin — Pedidos</h1>
+        <button class="refresh-btn" title="Actualizar" onclick="refrescarLista(function(){loadAdminPedidos(currentAdminTab);}, this)">🔄</button>
     </div>
     <div class="tabs">
         <div class="tab active" onclick="showAdminTab('pendientes')">⏳ Pendientes</div>
@@ -425,6 +432,7 @@
     <div class="header">
         <button class="back-btn" onclick="goHome()">←</button>
         <h1>🏭 Depósito</h1>
+        <button class="refresh-btn" title="Actualizar" onclick="refrescarLista(function(){loadDepPedidos(currentDepTab);}, this)">🔄</button>
     </div>
     <div class="tabs">
         <div class="tab active" onclick="showDepTab('aprobados')">✅ Para Armar</div>
@@ -454,6 +462,7 @@
     <div class="header">
         <button class="back-btn" onclick="goHome()">←</button>
         <h1>🖨️ Pedidos para Imprimir</h1>
+        <button class="refresh-btn" title="Actualizar" onclick="refrescarLista(loadImprimirPedidos, this)">🔄</button>
     </div>
     <div class="tabs">
         <div class="tab active" onclick="showImprimirTab('cola')">🖨️ Para Imprimir</div>
@@ -525,6 +534,7 @@
     <div class="header">
         <button class="back-btn" onclick="salirLogistica()">←</button>
         <h1 id="logistica-scan-title">🚚 Logística</h1>
+        <button class="refresh-btn" title="Actualizar" onclick="refrescarLista(loadLogisticaLista, this)">🔄</button>
     </div>
     <div style="padding:12px;">
         <button class="btn btn-success" id="btn-iniciar-scan-log" onclick="iniciarScannerLog()">📷 Escanear Pedido</button>
@@ -1022,6 +1032,17 @@ function goHome() {
     currentRepartidor = null;
     showScreen('inicio');
 }
+
+// Vuelve a pedir los datos de la lista actual (por si el sync tardó en llegar,
+// por ejemplo si el celu estuvo en segundo plano). No recarga toda la página,
+// así no se pierde la sesión / rol elegido.
+function refrescarLista(fn, btnEl) {
+    if (btnEl) {
+        btnEl.classList.add('spinning');
+        setTimeout(function(){ btnEl.classList.remove('spinning'); }, 500);
+    }
+    fn();
+}
 function setRole(role) {
     currentRole = role;
     if (role === 'armado')     { showScreen('armado-login'); return; }
@@ -1380,9 +1401,21 @@ function renderDetalleVend(p) {
             '<button class="btn btn-danger" onclick="guardarModificacion()">⚠️ ENVIAR MODIFICACIÓN</button>'+
         '</div>'
         : '')+
+        (p.estado!=='CANCELADO' && p.estado!=='ENTREGADO' ?
+        '<div class="card">'+
+            '<button class="btn" style="background:#6B7280;color:white;" onclick="cancelarPedidoVendedor(\''+p.id+'\')">🚫 Cancelar pedido</button>'+
+        '</div>'
+        : '')+
         '<div class="card">'+
             '<button class="btn" style="background:#E74C3C;color:white;" onclick="eliminarPedidoVendedor(\''+p.id+'\')">🗑️ Eliminar pedido</button>'+
         '</div>';
+}
+
+async function cancelarPedidoVendedor(id) {
+    if (!confirm('¿Seguro que querés CANCELAR este pedido? Va a figurar como CANCELADO en "Todos" (no se borra).')) return;
+    await st.update(id, { estado:'CANCELADO', modificado:false });
+    alert('🚫 Pedido cancelado.');
+    showScreen('vendedor');
 }
 
 async function eliminarPedidoVendedor(id) {
@@ -1534,7 +1567,12 @@ function renderDetalleAdmin(p) {
         '<div style="padding:8px 12px;">'+
             (p.estado==='APROBADO' ? '<button class="btn btn-warning" onclick="cambiarEstado(\'ARMADO\')">📦 Marcar como ARMADO</button>' : '')+
             (p.estado==='ARMADO'   ? '<button class="btn btn-success" onclick="cambiarEstado(\'ENTREGADO\')">🚀 Marcar como ENTREGADO</button>' : '')+
-        '</div>');
+        '</div>')+
+        (p.estado!=='CANCELADO' && p.estado!=='ENTREGADO' ?
+        '<div class="card">'+
+            '<button class="btn" style="background:#6B7280;color:white;" onclick="cancelarPedidoAdmin(\''+p.id+'\')">🚫 Cancelar pedido</button>'+
+        '</div>'
+        : '');
 }
 
 async function aprobarPedido() {
@@ -1553,6 +1591,12 @@ async function rechazarPedido() {
 }
 async function cambiarEstado(estado) {
     await st.update(currentPedido.id, { estado:estado });
+    showScreen('admin');
+}
+async function cancelarPedidoAdmin(id) {
+    if (!confirm('¿Seguro que querés CANCELAR este pedido? Va a figurar como CANCELADO en "Todos" (no se borra).')) return;
+    await st.update(id, { estado:'CANCELADO', modificado:false });
+    alert('🚫 Pedido cancelado.');
     showScreen('admin');
 }
 
