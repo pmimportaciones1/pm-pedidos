@@ -181,6 +181,8 @@
         .autocomplete-item:hover { background: #f0f2f5; }
         .autocomplete-item .stock-badge { font-size: 11px; color: #888; white-space: nowrap; flex-shrink: 0; }
         .autocomplete-item .stock-badge.sin-stock { color: #E74C3C; font-weight: 700; }
+        .autocomplete-item.disabled { cursor: not-allowed; opacity: 0.55; background: #fafafa; }
+        .autocomplete-item.disabled:hover { background: #fafafa; }
     </style>
 </head>
 <body>
@@ -714,7 +716,7 @@ async function cargarProductosDesdeSheet() {
         var filas = parseCSV(texto);
         productosCache = filas.slice(1)
             .filter(function(r) { return r[1] && r[1].trim(); })
-            .map(function(r) { return { nombre: r[1].trim(), stock: parseInt(r[14], 10) || 0 }; });
+            .map(function(r) { return { nombre: r[1].trim(), nombreNorm: normalizarNombreProducto(r[1]), stock: parseInt(r[14], 10) || 0 }; });
         productosCacheCargado = true;
     } catch (e) {
         console.warn('Autocompletado de productos no disponible:', e.message);
@@ -724,6 +726,91 @@ async function cargarProductosDesdeSheet() {
 function abrirNuevoPedido() {
     showScreen('nuevo-pedido');
     cargarProductosDesdeSheet();
+    iniciarTrackingReservas();
+}
+
+// ================================================================
+//  RESERVA VIRTUAL DE STOCK (no toca la planilla)
+// ================================================================
+// Mientras un pedido está PENDIENTE o APROBADO (todavía no fue armado),
+// su cantidad se descuenta "para adentro" del stock que ve el vendedor,
+// para no vender dos veces la misma unidad. La planilla real solo se
+// actualiza cuando el armador confirma el escaneo del QR.
+var reservasPorProducto     = {};
+var pedidosActivosReserva   = [];
+var trackingReservasIniciado = false;
+
+function normalizarNombreProducto(s) {
+    return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Extrae { nombreNorm, nombreOriginal, cantidad } por cada línea del detalle
+// que coincide EXACTAMENTE (normalizado) con un producto conocido de la planilla.
+function parseDetalleParaReserva(detalle) {
+    var items = [];
+    if (!detalle || !productosCache.length) return items;
+    var porNombreNorm = {};
+    productosCache.forEach(function(p) { porNombreNorm[p.nombreNorm] = p; });
+    detalle.split('\n').forEach(function(linea) {
+        linea = linea.trim();
+        if (!linea) return;
+        var m = linea.match(/^(\d+)\s*x\s*(.+)$/i);
+        var cantidad = m ? (parseInt(m[1], 10) || 1) : 1;
+        var nombre   = m ? m[2] : linea;
+        var norm = normalizarNombreProducto(nombre);
+        var prod = porNombreNorm[norm];
+        if (prod) items.push({ nombreNorm: prod.nombreNorm, nombreOriginal: prod.nombre, cantidad: cantidad });
+    });
+    return items;
+}
+
+function recalcularReservas() {
+    var nuevas = {};
+    pedidosActivosReserva.forEach(function(p) {
+        parseDetalleParaReserva(p.detalle).forEach(function(it) {
+            nuevas[it.nombreNorm] = (nuevas[it.nombreNorm] || 0) + it.cantidad;
+        });
+    });
+    reservasPorProducto = nuevas;
+}
+
+function stockDisponible(producto) {
+    var reservado = reservasPorProducto[producto.nombreNorm] || 0;
+    return producto.stock - reservado;
+}
+
+function iniciarTrackingReservas() {
+    if (trackingReservasIniciado) return;
+    trackingReservasIniciado = true;
+    st.subscribe(function(p) { return p.estado === 'PENDIENTE' || p.estado === 'APROBADO'; }, function(list) {
+        pedidosActivosReserva = list;
+        recalcularReservas();
+    });
+}
+
+// ================================================================
+//  ESCRITURA REAL EN LA PLANILLA (solo al confirmar armado por QR)
+// ================================================================
+// Apps Script desplegado desde la propia planilla de stock, que resta
+// la cantidad indicada de la columna O en la hoja de la semana actual.
+var STOCK_WRITE_URL   = 'https://script.google.com/macros/s/AKfycbyt11CdRB6dhwmgmTfS85nQXOllq1Gv_K-gzEPYGRvB9wHpnIuZWImCmOP3MzRgXhOUPA/exec';
+var STOCK_WRITE_TOKEN = 'PMSTOCK-E2XHTDRXHDWFTVVT82DN';
+
+async function descontarStockReal(pedido) {
+    var items = parseDetalleParaReserva(pedido.detalle).map(function(it) {
+        return { producto: it.nombreOriginal, cantidad: it.cantidad };
+    });
+    if (!items.length) return;
+    try {
+        var res = await fetch(STOCK_WRITE_URL, {
+            method: 'POST',
+            body: JSON.stringify({ token: STOCK_WRITE_TOKEN, items: items })
+        });
+        var data = await res.json();
+        if (!data.ok) console.warn('No se pudo descontar stock real:', data.error);
+    } catch (e) {
+        console.warn('Error al descontar stock real (la planilla no se actualizó):', e.message);
+    }
 }
 
 // Estado de la sugerencia activa (qué línea del textarea se está completando)
@@ -756,10 +843,11 @@ function manejarAutocompleteDetalle(el) {
 
     var box = document.getElementById('detalle-sugerencias');
     box.innerHTML = matches.map(function(p, i) {
-        var sinStock = p.stock <= 0;
-        return '<div class="autocomplete-item" onmousedown="event.preventDefault(); seleccionarSugerencia(' + i + ')">' +
+        var disponible = stockDisponible(p);
+        var sinStock = disponible <= 0;
+        return '<div class="autocomplete-item' + (sinStock ? ' disabled' : '') + '" onmousedown="event.preventDefault(); ' + (sinStock ? '' : 'seleccionarSugerencia(' + i + ')') + '">' +
             '<span>' + p.nombre + '</span>' +
-            '<span class="stock-badge' + (sinStock ? ' sin-stock' : '') + '">' + (sinStock ? 'sin stock' : 'stock: ' + p.stock) + '</span>' +
+            '<span class="stock-badge' + (sinStock ? ' sin-stock' : '') + '">' + (sinStock ? 'sin stock' : 'stock: ' + disponible) + '</span>' +
         '</div>';
     }).join('');
     box.classList.add('open');
@@ -1945,11 +2033,13 @@ async function onScanExitoso(decodedText) {
 }
 
 async function confirmarArmadoScan(id) {
+    var pedido = await st.get(id);
     await st.update(id, {
         estado: 'ARMADO', modificado: false,
         armadoPor: currentEmpleado,
         fechaArmado: new Date().toLocaleString('es-AR')
     });
+    if (pedido) descontarStockReal(pedido); // resta de verdad en la planilla (no bloquea la confirmación si falla)
     document.getElementById('armado-resultado').innerHTML =
         '<div class="card"><p style="color:#27AE60;font-weight:bold;">✅ Pedido marcado como ARMADO por '+currentEmpleado+'.</p>'+
         '<button class="btn btn-success" onclick="iniciarScanner()">📷 Escanear otro</button></div>';
